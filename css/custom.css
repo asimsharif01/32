@@ -1,0 +1,64 @@
+.form-control {
+    height: 1.8rem!important;
+    padding: 0.2rem 0.3rem!important;
+    font-size: 0.76563rem!important;
+    border-radius: 4px;
+}
+.form-select {
+    height: 1.8rem!important;
+    padding: 0.2rem 0.3rem!important;
+    font-size: 0.76563rem!important;
+    border-radius: 4px;
+}
+ .property-form {
+        border: 1px solid #7fb3ff;
+        padding: 10px;
+        background: #f8f8f8;
+    }
+
+    .property-form .form-label {
+        font-size: 13px;
+        color: #003399;
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .property-form .form-control,
+    .property-form .form-select {
+        height: 28px;
+        font-size: 13px;
+        padding: 2px 6px;
+        border: 1px solid #b5c7de;
+    }
+
+    .property-form .mb-custom {
+        margin-bottom: 8px;
+    }
+    .section-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+        background: #fff;
+    }
+
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #1a3e6f;
+        border-left: 4px solid #1a3e6f;
+        padding-left: 10px;
+    }
+
+    .agent-card {
+        background: #f8f9fc;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+
+    .agent-card h6 {
+        color: #1a3e6f;
+        margin-bottom: 12px;
+    }
