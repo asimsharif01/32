@@ -26,7 +26,7 @@
 </head>
 <style>
 	body {
-  background: linear-gradient(to bottom, #f5f7fa, #e4eaf2);
+  background: linear-gradient(to bottom, #f1e2f9, #c2d9f8);
 
 }
 
@@ -121,11 +121,11 @@
 <body class="vh-100">
     <div class="authincation h-100">
         <div class="container-fluid h-100">
-          <a href="https://livingindependentlyforequality.com" class="back-home"><span class="me-2">📂 </span>Switch Database</a>
             <div class="row h-100">
                 <div class="col-lg-6 col-md-12 col-sm-12 mx-auto align-self-center">
                     <div class="login-form">
                         <div class="text-center">
+                          <img src="images/logo.png" width="200" alt="Logo" class="mb-4">
                             <h3 class="title">Sign In</h3>
                             <p>Sign in to your account to start using CRM</p>
                         </div>

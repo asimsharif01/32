@@ -1,51 +1,34 @@
 <?php
+// transaction_detail.php — View / edit a single transaction (Key Player form)
 require_once 'db.php';
 session_start();
 
-$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-$is_edit = ($id > 0);
-
-$listing = null;
-$seller = null;
-$buyer = null;
+$id       = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$is_edit  = ($id > 0);
+$listing  = null;
 $milestones = [];
-$trustTransactions = [];
-$roles = [];
 
 if ($is_edit) {
-    $sql = "SELECT * FROM listings WHERE id = $id";
-    $result = mysqli_query($conn, $sql);
+    // Load the single listing row — everything is inline (denormalised)
+    $result  = mysqli_query($conn, "SELECT * FROM listings WHERE id = $id");
     $listing = mysqli_fetch_assoc($result);
 
-    $seller_sql = "SELECT c.* FROM transaction_roles tr JOIN contacts c ON tr.contact_id = c.id WHERE tr.listing_id = $id AND tr.role_type = 'Seller' LIMIT 1";
-    $seller_res = mysqli_query($conn, $seller_sql);
-    $seller = mysqli_fetch_assoc($seller_res);
+    if (!$listing) {
+        header('Location: transactions.php');
+        exit;
+    }
 
-    $buyer_sql = "SELECT c.* FROM transaction_roles tr JOIN contacts c ON tr.contact_id = c.id WHERE tr.listing_id = $id AND tr.role_type = 'Buyer' LIMIT 1";
-    $buyer_res = mysqli_query($conn, $buyer_sql);
-    $buyer = mysqli_fetch_assoc($buyer_res);
-
-    $milestone_sql = "SELECT * FROM listing_milestones WHERE listing_id = $id";
-    $milestone_res = mysqli_query($conn, $milestone_sql);
-    while ($row = mysqli_fetch_assoc($milestone_res)) {
+    // Load milestones
+    $ms_res = mysqli_query($conn, "SELECT * FROM listing_milestones WHERE listing_id = $id");
+    while ($row = mysqli_fetch_assoc($ms_res)) {
         $milestones[$row['milestone_type']] = $row;
-    }
-
-    $trust_sql = "SELECT * FROM trust_account_transactions WHERE transaction_number = '".mysqli_real_escape_string($conn, $listing['transaction_number'])."' ORDER BY trans_date";
-    $trust_res = mysqli_query($conn, $trust_sql);
-    while ($row = mysqli_fetch_assoc($trust_res)) {
-        $trustTransactions[] = $row;
-    }
-
-    $role_sql = "SELECT tr.role_type, tr.agent_id, c.* FROM transaction_roles tr JOIN contacts c ON tr.contact_id = c.id WHERE tr.listing_id = $id";
-    $role_res = mysqli_query($conn, $role_sql);
-    while ($role = mysqli_fetch_assoc($role_res)) {
-        $roles[$role['role_type']] = $role;
     }
 }
 
+// Helper — safely output a value from the listing row
 function val($data, $field, $default = '') {
-    return isset($data[$field]) ? htmlspecialchars($data[$field]) : $default;
+    if (!$data) return htmlspecialchars($default);
+    return isset($data[$field]) ? htmlspecialchars($data[$field]) : htmlspecialchars($default);
 }
 ?>
 <!DOCTYPE html>
@@ -53,426 +36,655 @@ function val($data, $field, $default = '') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $is_edit ? 'Edit Transaction' : 'Create Key Player' ?> - Larson & Company</title>
+    <title><?= $is_edit ? 'Edit Transaction' : 'New Transaction' ?> — Larson &amp; Company</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body { background: #f0f2f5; }
-        .section-card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .section-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; color: #1e3a5f; border-left: 4px solid #1e3a5f; padding-left: 10px; }
-        .mb-custom { margin-bottom: 0.75rem; }
-        .agent-card { background: #f8f9fc; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0; }
-        .agent-card h6 { color: #1e3a5f; margin-bottom: 12px; font-weight: 600; }
-        .financial-row { background: #fef9e6; padding: 12px; border-radius: 6px; margin: 10px 0; }
-        .trust-panel { background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; padding: 8px; font-size: 0.8rem; }
-        .trust-panel table { margin: 0; font-size: 0.75rem; }
-        .form-label { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem; color: #4a5568; }
-        .form-control, .form-select { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
-        .btn-sm { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+        .section-card   { background:#fff; border-radius:8px; padding:20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+        .section-title  { font-size:1.05rem; font-weight:700; margin-bottom:14px; color:#1e3a5f; border-left:4px solid #1e3a5f; padding-left:10px; }
+        .agent-card     { background:#f8f9fc; padding:14px; border-radius:8px; margin-bottom:14px; border:1px solid #e2e8f0; }
+        .agent-card h6  { color:#1e3a5f; margin-bottom:10px; font-weight:600; }
+        .financial-row  { background:#fef9e6; padding:12px; border-radius:6px; }
+        .form-label     { font-size:.75rem; font-weight:600; margin-bottom:.2rem; color:#4a5568; }
+        .form-control,
+        .form-select    { font-size:.85rem; padding:.25rem .5rem; }
+        .calc-field     { background:#e9ecef !important; font-weight:600; }
     </style>
 </head>
 <body>
 <?php include('header.php'); ?>
 
 <div class="content-body">
-    <div class="page-titles d-flex justify-content-between align-items-center">
+
+    <!-- Page title + action buttons -->
+    <div class="page-titles d-flex justify-content-between align-items-center mb-2">
         <h5 class="bc-title"><?= $is_edit ? 'Edit Transaction' : 'New Transaction' ?></h5>
         <div>
+            <a href="transactions.php" class="btn btn-light btn-sm me-1">← Back</a>
             <button type="submit" form="transactionForm" class="btn btn-primary btn-sm">Save</button>
             <?php if ($is_edit): ?>
-            <button type="button" class="btn btn-info btn-sm ms-2" id="keyPlayersReportBtn">Key Players Report</button>
+            <a href="generate_report.php?id=<?= $id ?>" target="_blank"
+               class="btn btn-info btn-sm ms-2">Key Players Report</a>
             <?php endif; ?>
         </div>
     </div>
+
     <div class="container-fluid">
-        <form id="transactionForm" action="transactions/save_transaction.php" method="POST">
-            <input type="hidden" name="listing_id" value="<?= $id ?>">
+    <form id="transactionForm" action="transactions/save_transaction.php" method="POST">
+        <input type="hidden" name="listing_id" value="<?= $id ?>">
 
-            <!-- Property Information Section (3 columns) -->
-            <div class="section-card">
-                <div class="section-title">Property Information</div>
-                <div class="row">
-                    <!-- LEFT COLUMN -->
-                    <div class="col-md-3">
-                        <div class="mb-custom">
-                            <label class="form-label">MLS Number</label>
-                            <input type="text" name="mls_number" class="form-control" value="<?= val($listing, 'mls_number') ?>">
+        <!-- ══ SECTION 1: Property Information ══════════════════════════════════ -->
+        <div class="section-card">
+            <div class="section-title">Property Information</div>
+            <div class="row g-2">
+
+                <!-- Col 1: IDs + address -->
+                <div class="col-md-4">
+                    <div class="mb-2">
+                        <label class="form-label">MLS Number</label>
+                        <input type="text" name="mls_number" class="form-control"
+                            value="<?= val($listing, 'mls_number') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Trans. Number</label>
+                        <input type="text" name="transaction_number" class="form-control"
+                            value="<?= val($listing, 'transaction_number') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Address</label>
+                        <input type="text" name="address1" class="form-control"
+                            value="<?= val($listing, 'address1') ?>">
+                    </div>
+                    <div class="row g-1 mb-2">
+                        <div class="col-6">
+                            <input type="text" name="city" class="form-control"
+                                placeholder="City" value="<?= val($listing, 'city') ?>">
                         </div>
-                        <div class="mb-custom">
-                            <label class="form-label">Trans. Number</label>
-                            <input type="text" name="transaction_number" class="form-control" value="<?= val($listing, 'transaction_number') ?>">
+                        <div class="col-3">
+                            <input type="text" name="state" class="form-control"
+                                placeholder="ST" maxlength="2" value="<?= val($listing, 'state', 'UT') ?>">
                         </div>
-                        <div class="mb-custom">
-                            <label class="form-label">Address</label>
-                            <input type="text" name="address1" class="form-control" value="<?= val($listing, 'address1') ?>">
-                        </div>
-                        <div class="row">
-                            <div class="col-7"><input type="text" name="city" class="form-control" placeholder="City" value="<?= val($listing, 'city') ?>"></div>
-                            <div class="col-3"><input type="text" name="state" class="form-control" placeholder="State" value="<?= val($listing, 'state', 'UT') ?>"></div>
-                            <div class="col-2"><input type="text" name="zip" class="form-control" placeholder="Zip" value="<?= val($listing, 'zip') ?>"></div>
-                        </div>
-                        <div class="mb-custom">
-                            <label class="form-label">Earnest Money</label>
-                            <input type="number" step="0.01" name="earnest_money_amount" class="form-control" value="<?= val($listing, 'earnest_money_amount') ?>">
-                        </div>
-                        <div class="mb-custom">
-                            <label class="form-label">On Deposit With</label>
-                            <input type="text" name="earnest_money_deposit_with" class="form-control" value="<?= val($listing, 'earnest_money_deposit_with') ?>">
+                        <div class="col-3">
+                            <input type="text" name="zip" class="form-control"
+                                placeholder="Zip" value="<?= val($listing, 'zip') ?>">
                         </div>
                     </div>
-
-                    <!-- CENTER COLUMN -->
-                    <div class="col-md-5">
-                        <div class="row">
-                            <div class="col-6">
-                                <label class="form-label">Property Type</label>
-                                <select name="property_type_id" class="form-select">
-                                    <option value="">Select</option>
-                                    <?php
-                                    $pt_res = mysqli_query($conn, "SELECT id, description FROM property_types");
-                                    while($pt = mysqli_fetch_assoc($pt_res)) {
-                                        $sel = ($listing['property_type_id'] == $pt['id']) ? 'selected' : '';
-                                        echo "<option value='{$pt['id']}' $sel>{$pt['description']}</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Purchase Price</label>
-                                <input type="number" step="0.01" name="purchase_price" class="form-control" value="<?= val($listing, 'purchase_price') ?>">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">UC Price</label>
-                                <input type="number" step="0.01" name="uc_price" class="form-control" value="<?= val($listing, 'uc_price') ?>">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Financing Type</label>
-                                <select name="financing_type_id" class="form-select">
-                                    <option value="">Select</option>
-                                    <?php
-                                    $ft_res = mysqli_query($conn, "SELECT id, description FROM financing_types");
-                                    while($ft = mysqli_fetch_assoc($ft_res)) {
-                                        $sel = ($listing['financing_type_id'] == $ft['id']) ? 'selected' : '';
-                                        echo "<option value='{$ft['id']}' $sel>{$ft['description']}</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Sales Status</label>
-                                <select name="status_id" class="form-select">
-                                    <option value="">Select</option>
-                                    <?php
-                                    $st_res = mysqli_query($conn, "SELECT id, description FROM sales_statuses");
-                                    while($st = mysqli_fetch_assoc($st_res)) {
-                                        $sel = ($listing['status_id'] == $st['id']) ? 'selected' : '';
-                                        echo "<option value='{$st['id']}' $sel>{$st['description']}</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Lead Source</label>
-                                <input type="text" name="lead_source" class="form-control" value="<?= val($listing, 'lead_source') ?>">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">D.O.L (Date of Listing)</label>
-                                <input type="date" name="date_of_listing" class="form-control" value="<?= val($listing, 'date_of_listing') ?>">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">D.O.E (Date of Expiration)</label>
-                                <input type="date" name="date_of_expiration" class="form-control" value="<?= val($listing, 'date_of_expiration') ?>">
-                            </div>
-                            <div class="col-12">
-                                <div class="form-check mt-2">
-                                    <input type="checkbox" name="private" class="form-check-input" value="1" <?= ($listing['private'] ?? 0) ? 'checked' : '' ?>>
-                                    <label class="form-check-label">Private</label>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="mb-2">
+                        <label class="form-label">Earnest Money Amount</label>
+                        <input type="number" step="0.01" name="earnest_money_amount" class="form-control"
+                            value="<?= val($listing, 'earnest_money_amount') ?>">
                     </div>
-
-                    <!-- RIGHT COLUMN (Trust Account Panel) -->
-                    <div class="col-md-4">
-                        <div class="trust-panel">
-                            <div class="fw-bold mb-2">Trust Account</div>
-                            <table class="table table-sm table-bordered">
-                                <thead><tr><th>TN</th><th>Date</th><th>Debit</th><th>Credit</th></tr></thead>
-                                <tbody>
-                                    <?php if (!empty($trustTransactions)): ?>
-                                        <?php foreach($trustTransactions as $tt): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($tt['transaction_number']) ?></td>
-                                            <td><?= htmlspecialchars($tt['trans_date']) ?></td>
-                                            <td>$<?= number_format($tt['debit'],2) ?></td>
-                                            <td>$<?= number_format($tt['credit'],2) ?></td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr><td colspan="4" class="text-center">No trust transactions</td></tr>
-                                    <?php endif; ?>
-                                </tbody>
-                                <?php 
-                                $totalDebit = array_sum(array_column($trustTransactions, 'debit'));
-                                $totalCredit = array_sum(array_column($trustTransactions, 'credit'));
-                                ?>
-                                <tfoot><tr><th colspan="2">Totals</th><th>$<?= number_format($totalDebit,2) ?></th><th>$<?= number_format($totalCredit,2) ?></th></tr></tfoot>
-                            </table>
-                        </div>
+                    <div class="mb-2">
+                        <label class="form-label">On Deposit With</label>
+                        <input type="text" name="earnest_money_deposit_with" class="form-control"
+                            value="<?= val($listing, 'earnest_money_deposit_with') ?>">
                     </div>
                 </div>
-            </div>
 
-            <!-- Financial / Commission Row -->
-            <div class="section-card">
-                <div class="section-title">Commission & Financials</div>
-                <div class="financial-row">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-2"><input type="number" step="0.01" name="final_price" id="final_price" class="form-control" placeholder="Final Price" value="<?= val($listing, 'final_price') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="commission_price" id="commission_price" class="form-control" placeholder="Comm. Price" value="<?= val($listing, 'commission_price') ?>"></div>
-                        <div class="col-md-1"><input type="number" step="0.01" name="commission_pct" id="commission_pct" class="form-control" placeholder="Comm %" value="<?= val($listing, 'commission_pct') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="commission_other" id="commission_other" class="form-control" placeholder="Other" value="<?= val($listing, 'commission_other') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="transaction_fee" id="transaction_fee" class="form-control" placeholder="Trans. Fee" value="<?= val($listing, 'transaction_fee') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="errors_omissions" id="errors_omissions" class="form-control" placeholder="Err. & Omiss." value="<?= val($listing, 'errors_omissions') ?>"></div>
-                    </div>
-                    <div class="row g-2 mt-2 align-items-center">
-                        <div class="col-md-2"><label class="form-label">Net Amt</label><input type="text" id="net_amt" class="form-control bg-light" readonly></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="agent_split" id="agent_split" class="form-control" placeholder="Split %" value="<?= val($listing, 'agent_split') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="processing_fee" id="processing_fee" class="form-control" placeholder="Proc. Fee" value="<?= val($listing, 'processing_fee') ?>"></div>
-                        <div class="col-md-2"><input type="number" step="0.01" name="other2" id="other2" class="form-control" placeholder="Other" value="<?= val($listing, 'other2') ?>"></div>
-                        <div class="col-md-2"><label class="form-label">Check Amt</label><input type="text" id="check_amt" class="form-control bg-light" readonly></div>
-                        <div class="col-md-2">
-                            <select name="split_with" class="form-select">
-                                <option value="">Split With</option>
+                <!-- Col 2: Type / prices / dates -->
+                <div class="col-md-4">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label">Property Type</label>
+                            <select name="property_type_id" class="form-select">
+                                <option value="">Select</option>
                                 <?php
-                                $split_res = mysqli_query($conn, "SELECT name FROM agents WHERE is_listing_agent=1 OR is_selling_agent=1 ORDER BY name");
-                                while($sp = mysqli_fetch_assoc($split_res)) {
-                                    $sel = ($listing['split_with'] == $sp['name']) ? 'selected' : '';
-                                    echo "<option value='".htmlspecialchars($sp['name'])."' $sel>".htmlspecialchars($sp['name'])."</option>";
+                                $pt_res = mysqli_query($conn, "SELECT id, description FROM property_types ORDER BY description");
+                                while ($pt = mysqli_fetch_assoc($pt_res)) {
+                                    $sel = ($listing['property_type_id'] ?? '') == $pt['id'] ? 'selected' : '';
+                                    echo "<option value='{$pt['id']}' $sel>{$pt['description']}</option>";
                                 }
                                 ?>
                             </select>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Buyer & Seller Info (2 columns) -->
-            <div class="section-card">
-                <div class="section-title">Buyer & Seller Information</div>
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Buyer Info</h6>
-                        <div class="mb-2"><input type="text" name="buyer_name" class="form-control" placeholder="Name" value="<?= val($buyer, 'name') ?>"></div>
-                        <div class="mb-2"><input type="text" name="buyer_home_phone" class="form-control" placeholder="Home Phone" value="<?= val($buyer, 'home_phone') ?>"></div>
-                        <div class="mb-2"><input type="text" name="buyer_cell_phone" class="form-control" placeholder="Cell Phone" value="<?= val($buyer, 'cell_phone') ?>"></div>
-                        <div class="mb-2"><input type="text" name="buyer_fax" class="form-control" placeholder="Fax" value="<?= val($buyer, 'fax') ?>"></div>
-                        <div class="mb-2"><input type="email" name="buyer_email" class="form-control" placeholder="Email" value="<?= val($buyer, 'email') ?>"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Seller Info</h6>
-                        <div class="mb-2"><input type="text" name="seller_name" class="form-control" placeholder="Name" value="<?= val($seller, 'name') ?>"></div>
-                        <div class="mb-2"><input type="text" name="seller_home_phone" class="form-control" placeholder="Home Phone" value="<?= val($seller, 'home_phone') ?>"></div>
-                        <div class="mb-2"><input type="text" name="seller_cell_phone" class="form-control" placeholder="Cell Phone" value="<?= val($seller, 'cell_phone') ?>"></div>
-                        <div class="mb-2"><input type="text" name="seller_fax" class="form-control" placeholder="Fax" value="<?= val($seller, 'fax') ?>"></div>
-                        <div class="mb-2"><input type="email" name="seller_email" class="form-control" placeholder="Email" value="<?= val($seller, 'email') ?>"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Deadlines -->
-            <div class="section-card">
-                <div class="section-title">Deadlines</div>
-                <div class="row">
-                    <?php
-                    $milestone_types = ['Date of Contract', 'Seller Disclosure', 'Due Diligence', 'Financing & Appraisal', 'Settlement'];
-                    foreach ($milestone_types as $mt):
-                        $date = isset($milestones[$mt]['due_date']) ? $milestones[$mt]['due_date'] : '';
-                        $completed = isset($milestones[$mt]['completed']) ? $milestones[$mt]['completed'] : 0;
-                    ?>
-                    <div class="col-md-2 mb-3">
-                        <label class="form-label"><?= $mt ?></label>
-                        <input type="date" name="milestone[<?= $mt ?>][due_date]" class="form-control" value="<?= $date ?>">
-                        <div class="form-check mt-1">
-                            <input type="checkbox" name="milestone[<?= $mt ?>][completed]" class="form-check-input" value="1" <?= $completed ? 'checked' : '' ?>>
-                            <label class="form-check-label">Completed</label>
+                        <div class="col-6">
+                            <label class="form-label">Purchase Price</label>
+                            <input type="number" step="0.01" name="purchase_price" class="form-control"
+                                value="<?= val($listing, 'purchase_price') ?>">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">UC Price</label>
+                            <input type="number" step="0.01" name="uc_price" class="form-control"
+                                value="<?= val($listing, 'uc_price') ?>">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Financing Type</label>
+                            <select name="financing_type_id" class="form-select">
+                                <option value="">Select</option>
+                                <?php
+                                $ft_res = mysqli_query($conn, "SELECT id, description FROM financing_types ORDER BY description");
+                                while ($ft = mysqli_fetch_assoc($ft_res)) {
+                                    $sel = ($listing['financing_type_id'] ?? '') == $ft['id'] ? 'selected' : '';
+                                    echo "<option value='{$ft['id']}' $sel>{$ft['description']}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Sales Status</label>
+                            <select name="status_id" class="form-select">
+                                <option value="">Select</option>
+                                <?php
+                                $st_res = mysqli_query($conn, "SELECT id, description FROM sales_statuses ORDER BY description");
+                                while ($st = mysqli_fetch_assoc($st_res)) {
+                                    $sel = ($listing['status_id'] ?? '') == $st['id'] ? 'selected' : '';
+                                    echo "<option value='{$st['id']}' $sel>{$st['description']}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Lead Source</label>
+                            <select name="lead_source" class="form-select">
+                                <option value="">Select</option>
+                                <?php
+                                $ls_res = mysqli_query($conn, "SELECT description FROM lead_sources WHERE active=1 ORDER BY description");
+                                while ($ls = mysqli_fetch_assoc($ls_res)) {
+                                    $sel = ($listing['lead_source'] ?? '') == $ls['description'] ? 'selected' : '';
+                                    echo "<option value='" . htmlspecialchars($ls['description']) . "' $sel>"
+                                        . htmlspecialchars($ls['description']) . "</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">D.O.L (Date of Listing)</label>
+                            <input type="date" name="date_of_listing" class="form-control"
+                                value="<?= val($listing, 'date_of_listing') ?>">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">D.O.E (Date of Expiration)</label>
+                            <input type="date" name="date_of_expiration" class="form-control"
+                                value="<?= val($listing, 'date_of_expiration') ?>">
+                        </div>
+                        <div class="col-12 mt-1">
+                            <div class="form-check">
+                                <input type="checkbox" name="private" class="form-check-input"
+                                    value="1" <?= ($listing['private'] ?? 0) ? 'checked' : '' ?>>
+                                <label class="form-check-label form-label">Private</label>
+                            </div>
                         </div>
                     </div>
-                    <?php endforeach; ?>
                 </div>
-            </div>
 
-            <!-- Key Players (5 roles) -->
-           <!-- Key Players (5 roles) - Denormalized directly into listings columns -->
-<div class="section-card">
-    <div class="section-title">Key Players</div>
-    <div class="row">
-        <?php
-        // Define each role with its column prefix and agent role flag
-        $role_config = [
-            'Loan Officer' => ['prefix' => 'LO', 'flag' => 'is_loan_officer'],
-            'Buyer Escrow Officer' => ['prefix' => 'BEO', 'flag' => 'is_buyer_escrow'],
-            'Seller Escrow Officer' => ['prefix' => 'SEO', 'flag' => 'is_seller_escrow'],
-            'Listing Agent' => ['prefix' => 'LA', 'flag' => 'is_listing_agent'],
-            'Selling Agent' => ['prefix' => 'SA', 'flag' => 'is_selling_agent']
-        ];
-        foreach ($role_config as $role_name => $cfg):
-            $prefix = $cfg['prefix'];
-            $flag = $cfg['flag'];
-            // Retrieve current values from $listing (if editing)
-            $current_name = val($listing, $prefix.'_Name');
-            $current_company = val($listing, $prefix.'_Company');
-            $current_email = val($listing, $prefix.'_Email');
-            $current_office = val($listing, $prefix.'_OfficePhone');
-            $current_cell = val($listing, $prefix.'_CellPhone');
-            $current_fax = val($listing, $prefix.'_Fax');
-            $current_asst_name = val($listing, $prefix.'_AsstName');
-            $current_asst_office = val($listing, $prefix.'_AsstOfficePhone');
-            $current_asst_fax = val($listing, $prefix.'_AsstFax');
-            $current_asst_email = val($listing, $prefix.'_AsstEmail');
-        ?>
-        <div class="col-md-6 mb-4 agent-card" data-role="<?= $prefix ?>">
-            <h6><?= $role_name ?></h6>
-            <div class="row">
-                <div class="col-12 mb-2">
-                    <label class="form-label">Name</label>
-                    <select class="form-select agent-select" data-prefix="<?= $prefix ?>">
-                        <option value="">Select Agent</option>
-                        <?php
-                        $sql = "SELECT id, name, company, office_phone, cell_phone, fax, email, asst_name, asst_office_phone, asst_fax, asst_email 
-                                FROM agents WHERE $flag = 1 AND active = 1 ORDER BY name";
-                        $res = mysqli_query($conn, $sql);
-                        while($ag = mysqli_fetch_assoc($res)) {
-                            $selected = ($current_name == $ag['name']) ? 'selected' : '';
-                            echo "<option value='".htmlspecialchars($ag['name'])."' data-company='".htmlspecialchars($ag['company'])."' 
-                                    data-office='".htmlspecialchars($ag['office_phone'])."' data-cell='".htmlspecialchars($ag['cell_phone'])."'
-                                    data-fax='".htmlspecialchars($ag['fax'])."' data-email='".htmlspecialchars($ag['email'])."'
-                                    data-asst-name='".htmlspecialchars($ag['asst_name'])."' data-asst-office='".htmlspecialchars($ag['asst_office_phone'])."'
-                                    data-asst-fax='".htmlspecialchars($ag['asst_fax'])."' data-asst-email='".htmlspecialchars($ag['asst_email'])."'
-                                    $selected>".htmlspecialchars($ag['name'])."</option>";
-                        }
-                        ?>
-                    </select>
-                </div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_Company" class="form-control agent-company" placeholder="Company" value="<?= $current_company ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_OfficePhone" class="form-control agent-office" placeholder="Office Phone" value="<?= $current_office ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_CellPhone" class="form-control agent-cell" placeholder="Cell" value="<?= $current_cell ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_Fax" class="form-control agent-fax" placeholder="Fax" value="<?= $current_fax ?>"></div>
-                <div class="col-12 mb-2"><input type="email" name="<?= $prefix ?>_Email" class="form-control agent-email" placeholder="Email" value="<?= $current_email ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_AsstName" class="form-control agent-asst-name" placeholder="Assistant Name" value="<?= $current_asst_name ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_AsstOfficePhone" class="form-control agent-asst-office" placeholder="Asst Office Phone" value="<?= $current_asst_office ?>"></div>
-                <div class="col-6 mb-2"><input type="text" name="<?= $prefix ?>_AsstFax" class="form-control agent-asst-fax" placeholder="Asst Fax" value="<?= $current_asst_fax ?>"></div>
-                <div class="col-6 mb-2"><input type="email" name="<?= $prefix ?>_AsstEmail" class="form-control agent-asst-email" placeholder="Asst Email" value="<?= $current_asst_email ?>"></div>
-                <div class="col-12">
-                    <div class="form-check">
-                        <input type="checkbox" name="<?= $prefix ?>_AddAsstFlag" class="form-check-input" value="1" <?= ($listing[$prefix.'_AddAsstFlag'] ?? 0) ? 'checked' : '' ?>>
-                        <label class="form-check-label">Add Assistant</label>
+                <!-- Col 3: Final price (closing info) -->
+                <div class="col-md-4">
+                    <div class="mb-2">
+                        <label class="form-label">Final / Closing Price</label>
+                        <input type="number" step="0.01" name="final_price" class="form-control"
+                            value="<?= val($listing, 'final_price') ?>">
+                        <small class="text-muted">Actual price the home closed at</small>
                     </div>
-                </div>
-                <?php if ($prefix == 'LA' || $prefix == 'SA'): ?>
-                <div class="col-12 mt-2">
-                    <div class="form-check">
-                        <input type="checkbox" name="<?= $prefix ?>_ForReport" class="form-check-input" value="1" <?= ($listing[$prefix.'_ForReport'] ?? 1) ? 'checked' : '' ?>>
-                        <label class="form-check-label">Include in Reports</label>
+                    <div class="mb-2">
+                        <label class="form-label">Closing Date</label>
+                        <input type="date" name="closing_date" class="form-control"
+                            value="<?= val($listing, 'closing_date') ?>">
                     </div>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-    <div class="row mt-3">
-        <div class="col-12">
-            <label class="form-label">Comments</label>
-            <textarea name="comments" class="form-control" rows="4"><?= val($listing, 'comments') ?></textarea>
-        </div>
-    </div>
-</div>
-
-            <!-- Misc Panel: Multiplier & Folder Link -->
-            <div class="section-card d-none">
-                <div class="row">
-                    <div class="col-md-3">
+                    <div class="mb-2">
+                        <label class="form-label">Contract Date</label>
+                        <input type="date" name="contract_date" class="form-control"
+                            value="<?= val($listing, 'contract_date') ?>">
+                        <small class="text-muted">Used for Under Contract reports</small>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">Multiplier</label>
-                        <input type="number" step="0.1" name="multiplier" class="form-control" value="<?= val($listing, 'multiplier', '1') ?>">
-                        <small class="text-muted">Change this number to 2 for double credit</small>
+                        <input type="number" step="0.1" name="multiplier" class="form-control"
+                            value="<?= val($listing, 'multiplier', '1') ?>">
+                        <small class="text-muted">Set to 2 for double credit on split deals</small>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Folder Link</label>
-                        <div class="input-group">
-                            <input type="text" name="folder_path" class="form-control" value="<?= val($listing, 'folder_path') ?>">
-                            <button type="button" class="btn btn-outline-secondary" id="viewFolderBtn">View Folder</button>
-                        </div>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- ══ SECTION 2: Commission & Financials ══════════════════════════════ -->
+        <div class="section-card">
+            <div class="section-title">Commission &amp; Financials</div>
+            <div class="financial-row">
+                <!-- Row 1: inputs that feed the net amount -->
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-2">
+                        <label class="form-label">Comm. Price</label>
+                        <input type="number" step="0.01" name="commission_price" id="commission_price"
+                            class="form-control" value="<?= val($listing, 'commission_price') ?>">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">Comm %</label>
+                        <input type="number" step="0.01" name="commission_pct" id="commission_pct"
+                            class="form-control" value="<?= val($listing, 'commission_pct') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Other</label>
+                        <input type="number" step="0.01" name="commission_other" id="commission_other"
+                            class="form-control" value="<?= val($listing, 'commission_other') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Trans. Fee</label>
+                        <input type="number" step="0.01" name="transaction_fee" id="transaction_fee"
+                            class="form-control" value="<?= val($listing, 'transaction_fee') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Err. &amp; Omiss.</label>
+                        <input type="number" step="0.01" name="errors_omissions" id="errors_omissions"
+                            class="form-control" value="<?= val($listing, 'errors_omissions') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Net Amt (calculated)</label>
+                        <input type="text" id="net_amt" name="commission_amount"
+                            class="form-control calc-field" readonly
+                            value="<?= val($listing, 'commission_amount') ?>">
+                    </div>
+                </div>
+                <!-- Row 2: split / fees → check amount -->
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label">Agent Split %</label>
+                        <input type="number" step="0.01" name="agent_split" id="agent_split"
+                            class="form-control" value="<?= val($listing, 'agent_split') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Proc. Fee</label>
+                        <input type="number" step="0.01" name="processing_fee" id="processing_fee"
+                            class="form-control" value="<?= val($listing, 'processing_fee') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Other 2</label>
+                        <input type="number" step="0.01" name="other2" id="other2"
+                            class="form-control" value="<?= val($listing, 'other2') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Check Amt (calculated)</label>
+                        <input type="text" id="check_amt" name="check_amount"
+                            class="form-control calc-field" readonly
+                            value="<?= val($listing, 'check_amount') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Split With</label>
+                        <select name="split_with" class="form-select">
+                            <option value="">None</option>
+                            <?php
+                            $sp_res = mysqli_query($conn, "SELECT name FROM agents
+                                WHERE (is_listing_agent=1 OR is_selling_agent=1)
+                                AND active=1 ORDER BY name");
+                            while ($sp = mysqli_fetch_assoc($sp_res)) {
+                                $sel = ($listing['split_with'] ?? '') == $sp['name'] ? 'selected' : '';
+                                echo "<option value='" . htmlspecialchars($sp['name']) . "' $sel>"
+                                    . htmlspecialchars($sp['name']) . "</option>";
+                            }
+                            ?>
+                        </select>
                     </div>
                 </div>
             </div>
-        </form>
-    </div>
-</div>
+        </div>
+
+
+        <!-- ══ SECTION 3: Buyer & Seller Information ═════════════════════════ -->
+        <!-- Stored directly in listings.buyer_* and listings.seller_* columns -->
+        <div class="section-card">
+            <div class="section-title">Buyer &amp; Seller Information</div>
+            <div class="row">
+
+                <!-- Buyer -->
+                <div class="col-md-6">
+                    <h6 class="fw-bold mb-3" style="color:#1e3a5f">Buyer Info</h6>
+                    <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="buyer_name" class="form-control"
+                            value="<?= val($listing, 'buyer_name') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Home Phone</label>
+                        <input type="text" name="buyer_home_phone" class="form-control"
+                            value="<?= val($listing, 'buyer_home_phone') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Cell Phone 1</label>
+                        <input type="text" name="buyer_cell_phone1" class="form-control"
+                            value="<?= val($listing, 'buyer_cell_phone1') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Cell Phone 2</label>
+                        <input type="text" name="buyer_cell_phone2" class="form-control"
+                            value="<?= val($listing, 'buyer_cell_phone2') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Fax</label>
+                        <input type="text" name="buyer_fax" class="form-control"
+                            value="<?= val($listing, 'buyer_fax') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email 1</label>
+                        <input type="email" name="buyer_email1" class="form-control"
+                            value="<?= val($listing, 'buyer_email1') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email 2</label>
+                        <input type="email" name="buyer_email2" class="form-control"
+                            value="<?= val($listing, 'buyer_email2') ?>">
+                    </div>
+                </div>
+
+                <!-- Seller -->
+                <div class="col-md-6">
+                    <h6 class="fw-bold mb-3" style="color:#1e3a5f">Seller Info</h6>
+                    <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="seller_name" class="form-control"
+                            value="<?= val($listing, 'seller_name') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Home Phone</label>
+                        <input type="text" name="seller_home_phone" class="form-control"
+                            value="<?= val($listing, 'seller_home_phone') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Cell Phone 1</label>
+                        <input type="text" name="seller_cell_phone1" class="form-control"
+                            value="<?= val($listing, 'seller_cell_phone1') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Cell Phone 2</label>
+                        <input type="text" name="seller_cell_phone2" class="form-control"
+                            value="<?= val($listing, 'seller_cell_phone2') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Fax</label>
+                        <input type="text" name="seller_fax" class="form-control"
+                            value="<?= val($listing, 'seller_fax') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email 1</label>
+                        <input type="email" name="seller_email1" class="form-control"
+                            value="<?= val($listing, 'seller_email1') ?>">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email 2</label>
+                        <input type="email" name="seller_email2" class="form-control"
+                            value="<?= val($listing, 'seller_email2') ?>">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- ══ SECTION 4: Deadlines ══════════════════════════════════════════ -->
+        <!-- Stored in listing_milestones table (one row per deadline type)    -->
+        <div class="section-card">
+            <div class="section-title">Deadlines</div>
+            <div class="row g-3">
+                <?php
+                $milestone_types = [
+                    'Date of Contract',
+                    'Seller Disclosure',
+                    'Due Diligence',
+                    'Financing & Appraisal',
+                    'Settlement',
+                ];
+                foreach ($milestone_types as $mt):
+                    $ms_date      = $milestones[$mt]['due_date']   ?? '';
+                    $ms_completed = $milestones[$mt]['completed']  ?? 0;
+                    $ms_na        = $milestones[$mt]['na_flag']    ?? 0;
+                ?>
+                <div class="col-md-2">
+                    <label class="form-label"><?= htmlspecialchars($mt) ?></label>
+                    <input type="date" name="milestone[<?= htmlspecialchars($mt) ?>][due_date]"
+                        class="form-control" value="<?= htmlspecialchars($ms_date) ?>">
+                    <div class="form-check mt-1">
+                        <input type="checkbox"
+                            name="milestone[<?= htmlspecialchars($mt) ?>][na_flag]"
+                            class="form-check-input" value="1" <?= $ms_na ? 'checked' : '' ?>>
+                        <label class="form-check-label">N/A</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox"
+                            name="milestone[<?= htmlspecialchars($mt) ?>][completed]"
+                            class="form-check-input" value="1" <?= $ms_completed ? 'checked' : '' ?>>
+                        <label class="form-check-label">Completed</label>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+
+        <!-- ══ SECTION 5: Key Players (5 agent roles) ═══════════════════════ -->
+        <!-- All stored inline in listings table as LO_*, BEO_*, SEO_*,      -->
+        <!-- LA_*, SA_* columns (denormalised — matches Access design).        -->
+        <div class="section-card">
+            <div class="section-title">Key Players</div>
+            <div class="row">
+                <?php
+                $role_config = [
+                    'Loan Officer'          => ['prefix' => 'LO',  'flag' => 'is_loan_officer'],
+                    'Buyer Escrow Officer'  => ['prefix' => 'BEO', 'flag' => 'is_buyer_escrow'],
+                    'Seller Escrow Officer' => ['prefix' => 'SEO', 'flag' => 'is_seller_escrow'],
+                    'Listing Agent'         => ['prefix' => 'LA',  'flag' => 'is_listing_agent'],
+                    'Selling Agent'         => ['prefix' => 'SA',  'flag' => 'is_selling_agent'],
+                ];
+
+                foreach ($role_config as $role_name => $cfg):
+                    $p = $cfg['prefix'];  // e.g. "LO"
+                ?>
+                <div class="col-md-6 mb-3">
+                    <div class="agent-card" data-prefix="<?= $p ?>">
+                        <h6><?= $role_name ?></h6>
+                        <div class="row g-2">
+
+                            <!-- Name dropdown — auto-fills from AgentTb data attributes -->
+                            <div class="col-12">
+                                <label class="form-label">Name</label>
+                                <select class="form-select agent-select" data-prefix="<?= $p ?>">
+                                    <option value="">Select <?= $role_name ?></option>
+                                    <?php
+                                    $ag_sql = "SELECT id, name, company, office_phone, cell_phone,
+                                                      fax, email,
+                                                      asst_name, asst_office_phone,
+                                                      asst_cell_phone1, asst_fax, asst_email
+                                               FROM agents
+                                               WHERE {$cfg['flag']} = 1 AND active = 1
+                                               ORDER BY name";
+                                    $ag_res = mysqli_query($conn, $ag_sql);
+                                    $current_name = $listing[$p . '_Name'] ?? '';
+                                    while ($ag = mysqli_fetch_assoc($ag_res)) {
+                                        $sel = ($current_name == $ag['name']) ? 'selected' : '';
+                                        echo "<option value='" . htmlspecialchars($ag['name']) . "'
+                                                data-company='"    . htmlspecialchars($ag['company'] ?? '') . "'
+                                                data-office='"     . htmlspecialchars($ag['office_phone'] ?? '') . "'
+                                                data-cell='"       . htmlspecialchars($ag['cell_phone'] ?? '') . "'
+                                                data-fax='"        . htmlspecialchars($ag['fax'] ?? '') . "'
+                                                data-email='"      . htmlspecialchars($ag['email'] ?? '') . "'
+                                                data-asst-name='"  . htmlspecialchars($ag['asst_name'] ?? '') . "'
+                                                data-asst-office='" . htmlspecialchars($ag['asst_office_phone'] ?? '') . "'
+                                                data-asst-cell='"  . htmlspecialchars($ag['asst_cell_phone1'] ?? '') . "'
+                                                data-asst-fax='"   . htmlspecialchars($ag['asst_fax'] ?? '') . "'
+                                                data-asst-email='" . htmlspecialchars($ag['asst_email'] ?? '') . "'
+                                                $sel>" . htmlspecialchars($ag['name']) . "</option>";
+                                    }
+                                    ?>
+                                </select>
+                                <!-- Hidden input carries the actual name to save -->
+                                <input type="hidden" name="<?= $p ?>_Name"
+                                    class="agent-name-val"
+                                    value="<?= val($listing, $p . '_Name') ?>">
+                            </div>
+
+                            <div class="col-6">
+                                <label class="form-label">Company</label>
+                                <input type="text" name="<?= $p ?>_Company" class="form-control agent-company"
+                                    value="<?= val($listing, $p . '_Company') ?>">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Office Phone</label>
+                                <input type="text" name="<?= $p ?>_OfficePhone" class="form-control agent-office"
+                                    value="<?= val($listing, $p . '_OfficePhone') ?>">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Cell Phone</label>
+                                <input type="text" name="<?= $p ?>_CellPhone" class="form-control agent-cell"
+                                    value="<?= val($listing, $p . '_CellPhone') ?>">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Fax</label>
+                                <input type="text" name="<?= $p ?>_Fax" class="form-control agent-fax"
+                                    value="<?= val($listing, $p . '_Fax') ?>">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Email</label>
+                                <input type="email" name="<?= $p ?>_Email" class="form-control agent-email"
+                                    value="<?= val($listing, $p . '_Email') ?>">
+                            </div>
+
+                            <!-- Assistant fields -->
+                            <div class="col-12 mt-1">
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                        name="<?= $p ?>_AddAsstFlag"
+                                        class="form-check-input asst-toggle"
+                                        value="1"
+                                        <?= ($listing[$p . '_AddAsstFlag'] ?? 0) ? 'checked' : '' ?>>
+                                    <label class="form-check-label form-label">Show Assistant</label>
+                                </div>
+                            </div>
+                            <div class="col-12 asst-block"
+                                style="<?= ($listing[$p . '_AddAsstFlag'] ?? 0) ? '' : 'display:none' ?>">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label">Asst. Name</label>
+                                        <input type="text" name="<?= $p ?>_AsstName"
+                                            class="form-control agent-asst-name"
+                                            value="<?= val($listing, $p . '_AsstName') ?>">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Asst. Office Phone</label>
+                                        <input type="text" name="<?= $p ?>_AsstOfficePhone"
+                                            class="form-control agent-asst-office"
+                                            value="<?= val($listing, $p . '_AsstOfficePhone') ?>">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Asst. Cell Phone</label>
+                                        <input type="text" name="<?= $p ?>_AsstCellPhone1"
+                                            class="form-control agent-asst-cell"
+                                            value="<?= val($listing, $p . '_AsstCellPhone1') ?>">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Asst. Fax</label>
+                                        <input type="text" name="<?= $p ?>_AsstFax"
+                                            class="form-control agent-asst-fax"
+                                            value="<?= val($listing, $p . '_AsstFax') ?>">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Asst. Email</label>
+                                        <input type="email" name="<?= $p ?>_AsstEmail"
+                                            class="form-control agent-asst-email"
+                                            value="<?= val($listing, $p . '_AsstEmail') ?>">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- For Report flag — LA and SA only -->
+                            <?php if ($p === 'LA' || $p === 'SA'): ?>
+                            <div class="col-12 mt-1">
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                        name="<?= $p ?>_ForReport"
+                                        class="form-check-input" value="1"
+                                        <?= ($listing[$p . '_ForReport'] ?? 1) ? 'checked' : '' ?>>
+                                    <label class="form-check-label form-label">Include in Reports</label>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                        </div><!-- /.row -->
+                    </div><!-- /.agent-card -->
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Comments -->
+            <div class="row mt-2">
+                <div class="col-12">
+                    <label class="form-label">Comments</label>
+                    <textarea name="comments" class="form-control" rows="4"><?= val($listing, 'comments') ?></textarea>
+                </div>
+            </div>
+        </div>
+
+    </form>
+    </div><!-- /.container-fluid -->
+</div><!-- /.content-body -->
 
 <?php include('footer.php'); ?>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-$(document).ready(function() {
-    // Commission calculation (unchanged)
-    function calculateCommission() {
-        let commPrice = parseFloat($('#commission_price').val()) || 0;
-        let commPct = parseFloat($('#commission_pct').val()) || 0;
-        let commOther = parseFloat($('#commission_other').val()) || 0;
-        let transFee = parseFloat($('#transaction_fee').val()) || 0;
-        let errors = parseFloat($('#errors_omissions').val()) || 0;
-        let agentSplit = parseFloat($('#agent_split').val()) || 0;
-        let procFee = parseFloat($('#processing_fee').val()) || 0;
-        let other2 = parseFloat($('#other2').val()) || 0;
+$(document).ready(function () {
 
-        let netAmt = (commPrice * commPct / 100) + commOther + transFee + errors;
-        let checkAmt = (netAmt * agentSplit / 100) + procFee + other2;
+    // ── Commission calculation ────────────────────────────────────────────
+    function calcCommission() {
+        var commPrice  = parseFloat($('#commission_price').val())  || 0;
+        var commPct    = parseFloat($('#commission_pct').val())    || 0;
+        var commOther  = parseFloat($('#commission_other').val())  || 0;
+        var transFee   = parseFloat($('#transaction_fee').val())   || 0;
+        var errors     = parseFloat($('#errors_omissions').val())  || 0;
+        var agentSplit = parseFloat($('#agent_split').val())       || 0;
+        var procFee    = parseFloat($('#processing_fee').val())    || 0;
+        var other2     = parseFloat($('#other2').val())            || 0;
+
+        var netAmt   = (commPrice * commPct / 100) + commOther + transFee + errors;
+        var checkAmt = (netAmt * agentSplit / 100) + procFee + other2;
 
         $('#net_amt').val(netAmt.toFixed(2));
         $('#check_amt').val(checkAmt.toFixed(2));
     }
 
-    $('#commission_price, #commission_pct, #commission_other, #transaction_fee, #errors_omissions, #agent_split, #processing_fee, #other2').on('input', calculateCommission);
-    calculateCommission();
+    $('#commission_price, #commission_pct, #commission_other, #transaction_fee, ' +
+      '#errors_omissions, #agent_split, #processing_fee, #other2')
+        .on('input', calcCommission);
+    calcCommission();
 
-    // Agent autofill for denormalized fields
-    $('.agent-select').change(function() {
-        let selectedOption = $(this).find(':selected');
-        let prefix = $(this).data('prefix');
-        let container = $(this).closest('.agent-card');
-        
-        if ($(this).val() == "") {
-            // Clear all fields in this agent card
-            container.find('input:not(.agent-name-hidden)').val('');
+
+    // ── Agent dropdown → auto-fill fields + update hidden name input ──────
+    $('.agent-select').on('change', function () {
+        var opt       = $(this).find(':selected');
+        var card      = $(this).closest('.agent-card');
+        var agentName = $(this).val();
+
+        // Update hidden name field (this is what gets submitted)
+        card.find('.agent-name-val').val(agentName);
+
+        if (!agentName) {
+            // Clear all editable fields in this card
+            card.find('input[type="text"], input[type="email"]').not('.agent-name-val').val('');
             return;
         }
-        
-        // Populate the fields using data attributes from the option
-        container.find('.agent-company').val(selectedOption.data('company') || '');
-        container.find('.agent-office').val(selectedOption.data('office') || '');
-        container.find('.agent-cell').val(selectedOption.data('cell') || '');
-        container.find('.agent-fax').val(selectedOption.data('fax') || '');
-        container.find('.agent-email').val(selectedOption.data('email') || '');
-        container.find('.agent-asst-name').val(selectedOption.data('asst-name') || '');
-        container.find('.agent-asst-office').val(selectedOption.data('asst-office') || '');
-        container.find('.agent-asst-fax').val(selectedOption.data('asst-fax') || '');
-        container.find('.agent-asst-email').val(selectedOption.data('asst-email') || '');
+
+        card.find('.agent-company').val(opt.data('company')    || '');
+        card.find('.agent-office').val(opt.data('office')      || '');
+        card.find('.agent-cell').val(opt.data('cell')          || '');
+        card.find('.agent-fax').val(opt.data('fax')            || '');
+        card.find('.agent-email').val(opt.data('email')        || '');
+        card.find('.agent-asst-name').val(opt.data('asst-name')    || '');
+        card.find('.agent-asst-office').val(opt.data('asst-office')|| '');
+        card.find('.agent-asst-cell').val(opt.data('asst-cell')    || '');
+        card.find('.agent-asst-fax').val(opt.data('asst-fax')      || '');
+        card.find('.agent-asst-email').val(opt.data('asst-email')  || '');
     });
 
-    // View Folder button
-    $('#viewFolderBtn').click(function() {
-        let folderPath = $('input[name="folder_path"]').val();
-        if (folderPath) {
-            window.open(folderPath, '_blank');
+
+    // ── Show/hide assistant block ─────────────────────────────────────────
+    $('.asst-toggle').on('change', function () {
+        var block = $(this).closest('.agent-card').find('.asst-block');
+        if ($(this).is(':checked')) {
+            block.show();
         } else {
-            alert('No folder path set');
+            block.hide();
         }
     });
 
-    $('#keyPlayersReportBtn').click(function() {
-        window.open('generate_report.php?id=<?= $id ?>', '_blank');
-    });
 });
 </script>
 </body>

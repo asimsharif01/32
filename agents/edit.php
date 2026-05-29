@@ -1,39 +1,92 @@
 <?php
+// agents/edit.php — Update an existing agent
 require_once '../db.php';
 
-$id = intval($_POST['id']);
-$name = mysqli_real_escape_string($conn, $_POST['name']);
-$company = mysqli_real_escape_string($conn, $_POST['company']);
-$address1 = mysqli_real_escape_string($conn, $_POST['address1']);
-$address2 = mysqli_real_escape_string($conn, $_POST['address2']);
-$city = mysqli_real_escape_string($conn, $_POST['city']);
-$state = mysqli_real_escape_string($conn, $_POST['state']);
-$zip = mysqli_real_escape_string($conn, $_POST['zip']);
-$office_phone = mysqli_real_escape_string($conn, $_POST['office_phone']);
-$cell_phone = mysqli_real_escape_string($conn, $_POST['cell_phone']);
-$fax = mysqli_real_escape_string($conn, $_POST['fax']);
-$email = mysqli_real_escape_string($conn, $_POST['email']);
-$asst_name = mysqli_real_escape_string($conn, $_POST['asst_name']);
-$asst_office_phone = mysqli_real_escape_string($conn, $_POST['asst_office_phone']);
-$asst_fax = mysqli_real_escape_string($conn, $_POST['asst_fax']);
-$asst_email = mysqli_real_escape_string($conn, $_POST['asst_email']);
-$is_loan_officer = isset($_POST['is_loan_officer']) ? 1 : 0;
-$is_buyer_escrow = isset($_POST['is_buyer_escrow']) ? 1 : 0;
-$is_seller_escrow = isset($_POST['is_seller_escrow']) ? 1 : 0;
-$is_listing_agent = isset($_POST['is_listing_agent']) ? 1 : 0;
-$is_selling_agent = isset($_POST['is_selling_agent']) ? 1 : 0;
-$include_in_reports = isset($_POST['include_in_reports']) ? 1 : 0;
-$active = isset($_POST['active']) ? 1 : 0;
+$id = intval($_POST['id'] ?? 0);
+if ($id <= 0) {
+    header('Location: ../agents.php');
+    exit;
+}
 
-$sql = "UPDATE agents SET 
-        name='$name', company='$company', address1='$address1', address2='$address2', city='$city', state='$state', zip='$zip',
-        office_phone='$office_phone', cell_phone='$cell_phone', fax='$fax', email='$email',
-        asst_name='$asst_name', asst_office_phone='$asst_office_phone', asst_fax='$asst_fax', asst_email='$asst_email',
-        is_loan_officer=$is_loan_officer, is_buyer_escrow=$is_buyer_escrow, is_seller_escrow=$is_seller_escrow,
-        is_listing_agent=$is_listing_agent, is_selling_agent=$is_selling_agent, include_in_reports=$include_in_reports, active=$active
-        WHERE id=$id";
-mysqli_query($conn, $sql);
+function esc($conn, $key) {
+    return mysqli_real_escape_string($conn, trim($_POST[$key] ?? ''));
+}
+
+$name               = esc($conn, 'name');
+$company            = esc($conn, 'company');
+$address1           = esc($conn, 'address1');
+$address2           = esc($conn, 'address2');
+$city               = esc($conn, 'city');
+$state              = esc($conn, 'state');
+$zip                = esc($conn, 'zip');
+$office_phone       = esc($conn, 'office_phone');
+$cell_phone         = esc($conn, 'cell_phone');
+$cell_phone2        = esc($conn, 'cell_phone2');
+$fax                = esc($conn, 'fax');
+$email              = esc($conn, 'email');
+
+// Assistant 1
+$asst_name          = esc($conn, 'asst_name');
+$asst_office_phone  = esc($conn, 'asst_office_phone');
+$asst_cell_phone1   = esc($conn, 'asst_cell_phone1');
+$asst_fax           = esc($conn, 'asst_fax');
+$asst_email         = esc($conn, 'asst_email');
+
+// Assistant 2
+$asst_name2         = esc($conn, 'asst_name2');
+$asst_office_phone2 = esc($conn, 'asst_office_phone2');
+$asst_cell_phone2   = esc($conn, 'asst_cell_phone2');
+$asst_fax2          = esc($conn, 'asst_fax2');
+$asst_email2        = esc($conn, 'asst_email2');
+
+// Flags
+$is_loan_officer    = isset($_POST['is_loan_officer'])    ? 1 : 0;
+$is_buyer_escrow    = isset($_POST['is_buyer_escrow'])    ? 1 : 0;
+$is_seller_escrow   = isset($_POST['is_seller_escrow'])   ? 1 : 0;
+$is_listing_agent   = isset($_POST['is_listing_agent'])   ? 1 : 0;
+$is_selling_agent   = isset($_POST['is_selling_agent'])   ? 1 : 0;
+$include_in_reports = isset($_POST['include_in_reports']) ? 1 : 0;
+$active             = isset($_POST['active'])             ? 1 : 0;
+$add_asst_flag      = isset($_POST['add_asst_flag'])      ? 1 : 0;
+
+$sql = "
+    UPDATE agents SET
+        name               = '$name',
+        company            = '$company',
+        address1           = '$address1',
+        address2           = '$address2',
+        city               = '$city',
+        state              = '$state',
+        zip                = '$zip',
+        office_phone       = '$office_phone',
+        cell_phone         = '$cell_phone',
+        cell_phone2        = '$cell_phone2',
+        fax                = '$fax',
+        email              = '$email',
+        asst_name          = '$asst_name',
+        asst_office_phone  = '$asst_office_phone',
+        asst_cell_phone1   = '$asst_cell_phone1',
+        asst_fax           = '$asst_fax',
+        asst_email         = '$asst_email',
+        asst_name2         = '$asst_name2',
+        asst_office_phone2 = '$asst_office_phone2',
+        asst_cell_phone2   = '$asst_cell_phone2',
+        asst_fax2          = '$asst_fax2',
+        asst_email2        = '$asst_email2',
+        is_loan_officer    = $is_loan_officer,
+        is_buyer_escrow    = $is_buyer_escrow,
+        is_seller_escrow   = $is_seller_escrow,
+        is_listing_agent   = $is_listing_agent,
+        is_selling_agent   = $is_selling_agent,
+        include_in_reports = $include_in_reports,
+        active             = $active,
+        add_asst_flag      = $add_asst_flag
+    WHERE id = $id
+";
+
+if (!mysqli_query($conn, $sql)) {
+    die('DB error: ' . mysqli_error($conn));
+}
 
 header('Location: ../agents.php');
 exit;
-?>

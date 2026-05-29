@@ -62,3 +62,195 @@
         color: #1a3e6f;
         margin-bottom: 12px;
     }
+    .nav-header{
+        background-color:white;
+        border-bottom:1px solid #e0e0e0;
+    }
+    .content-body .container-fluid, .content-body .container-sm, .content-body .container-md, .content-body .container-lg, .content-body .container-xl, .content-body .container-xxl {
+    padding-top: 0.5rem;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+}
+.page-titles {
+    padding: 0.6rem 0.95rem 0.6rem;
+}
+.page-titles .bc-title {
+    position: relative;
+    display: inline-block;
+    font-size: 20px;
+    font-weight: 600;
+    color: #111;
+    padding-left: 18px;
+}
+
+.page-titles .bc-title::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 70%;
+    border-radius: 20px;
+    background: linear-gradient(to bottom, #5d79f8, #b749f2);
+}
+.filter-row{
+    background: linear-gradient(to left, #f1e2f9, #c2d9f8);
+    padding: 3px;
+    margin-top: 0px !important;
+    border-radius: 3px;
+}
+/* Table Wrapper */
+.table-responsive {
+    border-radius: 14px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.04);
+}
+
+/* Table */
+#example {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    color: #444;
+}
+
+/* Header */
+#example thead th {
+    background: #f7f9fc;
+    color: #1c1c1c;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: 12px 14px;
+    border: none;
+    white-space: nowrap;
+}
+
+/* Body */
+#example tbody td {
+    padding: 12px 14px;
+    vertical-align: middle;
+    border-top: 1px solid #f1f3f7;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+/* Hover */
+#example.table-hover tbody tr:hover {
+    background: #f8faff;
+    transition: 0.2s ease;
+}
+
+/* Compact rows */
+#example tbody tr {
+    height: 48px;
+}
+
+
+/* Optional rounded corners */
+#example thead th:first-child {
+    border-top-left-radius: 12px;
+}
+
+#example thead th:last-child {
+    border-top-right-radius: 12px;
+}
+#example tbody tr:nth-child(even) {
+    background: #fcfdff;
+}
+#example thead th,
+#example tbody td {
+    padding: 10px 12px;
+}
+.content-body{
+    background: linear-gradient(to right, #dde1f7, #f7efff);
+}
+
+.btn-danger {
+    --bs-btn-color: #000;
+    --bs-btn-bg: #9d0505;
+    --bs-btn-border-color: #bd0000;
+    --bs-btn-hover-color: #000;
+    --bs-btn-hover-bg: #891a1a;
+    --bs-btn-hover-border-color: #ae3535;
+    --bs-btn-focus-shadow-rgb: 217, 80, 80;
+    --bs-btn-active-color: #000;
+    --bs-btn-active-bg: #6d2121;
+    --bs-btn-active-border-color: #a03131;
+    --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+    --bs-btn-disabled-color: #000;
+    --bs-btn-disabled-bg: #892929;
+    --bs-btn-disabled-border-color: #812626;
+}
+.dataTables_wrapper .dataTables_length .bootstrap-select .dropdown-toggle
+ {
+    font-size: 0.7rem !important;
+    padding: 0.25rem 1rem;
+}
+.dataTables_wrapper {
+    position: relative;
+    clear: both;
+    zoom: 1;
+    padding: 4px;
+}
+#example_filter input {
+    height: 1.6rem;
+}
+#example thead th, #example tbody td {
+    padding: 2px 4px;
+}
+.autocomplete-suggestions {
+    position: absolute;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    width: auto;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: none;
+}
+.autocomplete-suggestion {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+.autocomplete-suggestion:hover {
+    background-color: #e9ecef;
+}
+.form-label {
+    margin-bottom: 0.2rem;
+    font-size: 12px;
+}
+.modal-title {
+    position: relative;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #111;
+    padding-left: 18px;
+}
+
+.modal-title::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 70%;
+    border-radius: 20px;
+    background: linear-gradient(to bottom, #5d79f8, #b749f2);
+}
+.modal-body {
+    padding: 0.875rem;
+}
+.modal-footer {
+    padding: 0.5rem 0.875rem;
+}

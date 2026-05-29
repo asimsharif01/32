@@ -4,7 +4,7 @@
         ***********************************-->
         <div class="footer">
             <div class="copyright">
-               <p>Copyright © Developed by <a href="https://dexignzone.com/" target="_blank">DexignZone</a> 2023</p>
+               <p>Copyright © Larson & Company <?php echo date("Y"); ?></p>
             </div>
         </div>
         <!--**********************************
@@ -32,7 +32,7 @@
      <script src="vendor/global/global.min.js"></script>
 	<script src="vendor/chart.js/Chart.bundle.min.js"></script>
 	<script src="vendor/bootstrap-select/dist/js/bootstrap-select.min.js"></script>
-	<script src="vendor/apexchart/apexchart.js"></script>
+
 	
 	<!-- Dashboard 1 -->
 	<script src="js/dashboard/dashboard-1.js"></script>
