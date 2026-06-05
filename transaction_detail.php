@@ -245,7 +245,7 @@ function raw($data, $field, $default = '') {
         <div class="sc" style="position:sticky;top:10px">
             <div class="sc-title">Deadlines</div>
             <?php
-            $mtypes = ['Date of Contract','Seller Disclosure','Due Diligence','Financing & Appraisal','Settlement'];
+            $mtypes = ['Seller Disclosure','Due Diligence','Financing & Appraisal', 'Settlement','Date of Contract'];
             foreach ($mtypes as $mt):
                 $ms   = $milestones[$mt] ?? [];
                 $mdate= $ms['due_date']  ?? '';

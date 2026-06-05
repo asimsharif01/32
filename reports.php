@@ -359,8 +359,6 @@ function fmtD($d) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reports — Larson &amp; Company</title>
-     <!-- FAVICONS ICON -->
-    <link rel="shortcut icon" type="image/png" href="images/favicon.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
@@ -389,6 +387,8 @@ function fmtD($d) {
         .totals-box .t-lbl { font-size:.75rem; color:#6c757d; }
         .avg-row td { font-style:italic; color:#555; background:#fafbfc; }
         @media(max-width:900px){ .prog-grid{grid-template-columns:1fr;} .ytd-box .ytd-grid{grid-template-columns:1fr 1fr;} }
+
+        /* no global print CSS — each report uses its own print page */
     </style>
 </head>
 <body>
@@ -408,17 +408,17 @@ function fmtD($d) {
 
                 <div class="col-md-2">
                     <label class="form-label form-label-sm">From</label>
-                    <input type="date" name="from_date" class="form-control"
+                    <input type="date" name="from_date" class="form-control form-control-sm"
                         value="<?= h($from_date) ?>">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label form-label-sm">To</label>
-                    <input type="date" name="to_date" class="form-control"
+                    <input type="date" name="to_date" class="form-control form-control-sm"
                         value="<?= h($to_date) ?>">
                 </div>
                 <div class="col-md-1">
                     <label class="form-label form-label-sm">Year</label>
-                    <input type="number" name="year" class="form-control"
+                    <input type="number" name="year" class="form-control form-control-sm"
                         value="<?= $year ?>" min="2000" max="2099">
                 </div>
                 <div class="col-md-3">
@@ -478,7 +478,15 @@ function fmtD($d) {
                ═══════════════════════════════════════════════════════════ */ ?>
         <?php if ($active_tab === 'company'): ?>
         <div class="rpt-card">
-            <div class="rpt-title">Sales Summary</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="rpt-title">Sales Summary</div>
+                <a href="print_report.php?tab=company&<?= http_build_query($_GET) ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-outline-secondary"
+                   style="font-size:.78rem;white-space:nowrap">
+                    🖨️ Export / Print
+                </a>
+            </div>
             <div class="rpt-meta">
                 Between: <?= fmtD($from_date) ?> and <?= fmtD($to_date) ?> &nbsp;·&nbsp;
                 <?= h($agent_label) ?>
@@ -607,7 +615,15 @@ function fmtD($d) {
                ═══════════════════════════════════════════════════════════ */ ?>
         <?php elseif ($active_tab === 'progress'): ?>
         <div class="rpt-card">
-            <div class="rpt-title">Progress Report</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="rpt-title">Progress Report</div>
+                <a href="print_report.php?tab=progress&<?= http_build_query($_GET) ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-outline-secondary"
+                   style="font-size:.78rem;white-space:nowrap">
+                    🖨️ Export / Print
+                </a>
+            </div>
             <div class="rpt-meta">
                 Between: <?= fmtD($from_date) ?> and <?= fmtD($to_date) ?> &nbsp;·&nbsp;
                 <?= h($agent_label) ?>
@@ -726,7 +742,15 @@ function fmtD($d) {
                ═══════════════════════════════════════════════════════════ */ ?>
         <?php elseif ($active_tab === 'listings'): ?>
         <div class="rpt-card">
-            <div class="rpt-title">Listings Report</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="rpt-title">Listings Report</div>
+                <a href="print_report.php?tab=listings&<?= http_build_query($_GET) ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-outline-secondary"
+                   style="font-size:.78rem;white-space:nowrap">
+                    🖨️ Export / Print
+                </a>
+            </div>
             <div class="rpt-meta">
                 Between: <?= fmtD($from_date) ?> and <?= fmtD($to_date) ?> &nbsp;·&nbsp;
                 For: <?= h($agent_label) ?>
@@ -785,7 +809,15 @@ function fmtD($d) {
                ═══════════════════════════════════════════════════════════ */ ?>
         <?php elseif ($active_tab === 'summary'): ?>
         <div class="rpt-card">
-            <div class="rpt-title">Agent Sales Summary</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="rpt-title">Agent Sales Summary</div>
+                <a href="print_report.php?tab=summary&<?= http_build_query($_GET) ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-outline-secondary"
+                   style="font-size:.78rem;white-space:nowrap">
+                    🖨️ Export / Print
+                </a>
+            </div>
             <div class="rpt-meta">
                 Between: <?= fmtD($from_date) ?> and <?= fmtD($to_date) ?>
             </div>

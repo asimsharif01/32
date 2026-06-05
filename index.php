@@ -412,6 +412,8 @@ function days_until($d) {
             .kpi-strip,.stat-row{ grid-template-columns:1fr; }
             .dash{ padding:14px 16px; }
         }
+
+        /* no global print CSS — dashboard uses print_dashboard.php */
     </style>
 </head>
 <body>
@@ -437,7 +439,17 @@ function days_until($d) {
                 <?= date('l, F j, Y') ?> &nbsp;·&nbsp; Larson &amp; Company Real Estate
             </div>
         </div>
-        <div class="year-badge"><?= $year ?> YTD</div>
+        <div style="display:flex;align-items:center;gap:10px">
+            <div class="year-badge"><?= $year ?> YTD</div>
+            <button onclick="window.open('print_dashboard.php','_blank')" class="no-print"
+                style="background:#1e3a5f;color:#fff;border:none;padding:7px 16px;
+                       border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+                       display:flex;align-items:center;gap:6px;transition:all .2s"
+                onmouseover="this.style.background='#2a4f82'"
+                onmouseout="this.style.background='#1e3a5f'">
+                🖨️ Export / Print
+            </button>
+        </div>
     </div>
 
 
@@ -508,7 +520,7 @@ function days_until($d) {
     </div>
 
 
-    <!-- ── Row: Monthly Chart + Lead Sources ─────────────────────────── -->
+    <!-- ── Row: Monthly Chart + Referral Sources ────────────────────── -->
     <div class="row-3">
 
         <div class="card2">
@@ -521,14 +533,42 @@ function days_until($d) {
             </div>
         </div>
 
-        <div class="card2">
-            <div class="card2-title">Lead Sources</div>
-            <?php if ($lead_data): ?>
-            <div class="chart-wrap-sm">
+        <div class="card2" id="referralSourcesCard">
+            <div class="card2-title">
+                Referral Sources
+                <span style="font-family:'DM Sans';font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">Closed YTD</span>
+            </div>
+            <?php if ($lead_data):
+                $total_leads = array_sum(array_column($lead_data,'cnt'));
+                $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed'];
+            ?>
+            <!-- Doughnut chart -->
+            <div style="position:relative;height:150px;margin-bottom:14px">
                 <canvas id="leadChart"></canvas>
             </div>
+            <!-- Breakdown list with counts + percentages -->
+            <div style="display:flex;flex-direction:column;gap:6px">
+                <?php foreach ($lead_data as $i => $ld):
+                    $pct = $total_leads > 0 ? round($ld['cnt'] / $total_leads * 100) : 0;
+                    $color = $lead_colors[$i % count($lead_colors)];
+                ?>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:10px;height:10px;border-radius:50%;background:<?= $color ?>;flex-shrink:0"></div>
+                    <div style="flex:1;font-size:12px;font-weight:500;color:var(--text)"><?= htmlspecialchars($ld['src']) ?></div>
+                    <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--ink)"><?= $ld['cnt'] ?></div>
+                    <div style="font-size:11px;color:var(--text3);min-width:32px;text-align:right"><?= $pct ?>%</div>
+                </div>
+                <!-- Progress bar -->
+                <div style="height:4px;background:var(--border);border-radius:2px;margin-left:18px;margin-bottom:2px">
+                    <div style="height:100%;border-radius:2px;background:<?= $color ?>;width:<?= $pct ?>%;transition:width 1s ease"></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text3)">
+                Total closed: <strong style="color:var(--ink)"><?= $total_leads ?></strong> transactions
+            </div>
             <?php else: ?>
-            <div class="empty">No closed data yet</div>
+            <div class="empty">No closed transactions yet — referral data will appear here.</div>
             <?php endif; ?>
         </div>
 
@@ -779,6 +819,7 @@ new Chart(document.getElementById('leadChart'), {
     }
 });
 <?php endif; ?>
+
 </script>
 </body>
 </html>

@@ -338,11 +338,60 @@ function agentCard($title, $prefix, $r) {
         }
 
         /* ── Print styles ──────────────────────────────────────────────── */
+        /* ── PRINT / A4 SINGLE PAGE ────────────────────────────────── */
+        @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 8mm 10mm;   /* tight margins to maximise space */
+        }
+
         @media print {
-            body            { background: #fff; padding: 0; }
-            .report-wrap    { padding: 10px; box-shadow: none; border-radius: 0; }
+            /* Reset screen chrome */
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+
             .no-print       { display: none !important; }
-            .agent-grid     { grid-template-columns: repeat(2, 1fr); }
+            .report-wrap    {
+                max-width: 100% !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+            }
+
+            /* ── Tighten every section ─────────────────────────────── */
+            .section        { margin-bottom: 5px !important; }
+            .section-title  { padding: 2px 8px !important; margin-bottom: 5px !important; font-size: 9px !important; }
+            .report-header  { padding-bottom: 6px !important; margin-bottom: 8px !important; }
+
+            /* ── Shrink typography ────────────────────────────────── */
+            body            { font-size: 8px !important; }
+            .report-title-block h1 { font-size: 13px !important; }
+            .company-block  { font-size: 8px !important; }
+            .company-block .co-name { font-size: 11px !important; }
+            .info-row       { margin-bottom: 2px !important; font-size: 8px !important; }
+            .il             { width: 110px !important; }
+
+            /* ── Agent grid: 3 columns on A4 to fit all 5 cards ──── */
+            .agent-grid {
+                grid-template-columns: repeat(3, 1fr) !important;
+                gap: 6px !important;
+            }
+            .agent-card     { padding: 6px 8px !important; }
+            .agent-card-title { font-size: 8px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; }
+            .agent-row      { font-size: 8px !important; margin-bottom: 2px !important; }
+            .al             { width: 65px !important; }
+            .asst-divider   { margin: 3px 0 !important; }
+
+            /* ── Two-col layout ───────────────────────────────────── */
+            .two-col        { gap: 15px !important; }
+
+            /* ── Prevent unwanted page breaks ─────────────────────── */
+            .section        { break-inside: avoid !important; }
+            .agent-card     { break-inside: avoid !important; }
+            .agent-grid     { break-inside: avoid !important; }
+            .two-col        { break-inside: avoid !important; }
+
+            /* ── Comments ─────────────────────────────────────────── */
+            .comments-box   { padding: 5px !important; font-size: 8px !important; min-height: unset !important; }
         }
     </style>
 </head>
@@ -350,7 +399,10 @@ function agentCard($title, $prefix, $r) {
 <div class="report-wrap">
 
     <!-- Print button (hidden on print) -->
-    <div class="no-print">
+    <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:6px 12px;border-radius:6px">
+        
+        </div>
         <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
     </div>
 
@@ -362,7 +414,6 @@ function agentCard($title, $prefix, $r) {
         </div>
         <div class="company-block">
             <div class="co-name">LARSON &amp; COMPANY</div>
-            <div>Real Estate</div>
             <div>pros@larsonandcompany.com</div>
             <div>www.larsonandcompany.com</div>
         </div>

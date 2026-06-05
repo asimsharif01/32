@@ -57,12 +57,11 @@ function logout() {
 }
 </script>
 <style>
-     .header-right .header-media {
+.header-right .header-media {
     width: 1.875rem;
     height: -0.125rem;
     margin-right: 4px;
     margin-top: 0px;
-
 }
 </style>
 <body data-typography="poppins" data-theme-version="light" data-layout="vertical" data-nav-headerbg="black"
