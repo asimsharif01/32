@@ -56,7 +56,15 @@ function logout() {
     window.location.href = 'logout.php';
 }
 </script>
+<style>
+     .header-right .header-media {
+    width: 1.875rem;
+    height: -0.125rem;
+    margin-right: 4px;
+    margin-top: 0px;
 
+}
+</style>
 <body data-typography="poppins" data-theme-version="light" data-layout="vertical" data-nav-headerbg="black"
     data-headerbg="color_1">
 
@@ -110,7 +118,7 @@ function logout() {
                         </div>
                         <ul class="navbar-nav header-right">
 
-                            <li class="nav-item dropdown notification_dropdown">
+                            <li class="nav-item dropdown notification_dropdown d-none">
                                 <a class="nav-link" href="javascript:void(0);" role="button" data-bs-toggle="dropdown">
                                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
@@ -274,11 +282,21 @@ function logout() {
                                         <div class="header-info2 d-flex align-items-center">
                                             <div class="header-media">
                                                 <?php
-													//display profile_image from session
-													$profileImage = $_SESSION['profile_image'] ?? 'default-profile.jpg';
+													$sql="SELECT profile_image FROM users WHERE id = ?";
+                                                    $stmt = $conn->prepare($sql);
+                                                    $stmt->bind_param("i", $_SESSION['id']);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result->num_rows > 0) {
+                                                        $row = $result->fetch_assoc();
+                                                        $profileImage = $row['profile_image'] ?? 'default-profile.jpg';
+                                                    } else {
+                                                        $profileImage = 'default-profile.jpg';
+                                                    }
+                                                    echo "<img src='uploads/users/" . htmlspecialchars($profileImage) . "' class='avatar avatar-md' alt='Profile'>";
 													?>
-                                                <img src="uploads/users/<?= htmlspecialchars($_SESSION['profile_image'] ?? 'default-profile.jpg') ?>"
-                                                    alt="Profile">
+                                                
+                                               
                                             </div>
                                             <div class="header-info">
                                                 <?php 
@@ -297,9 +315,22 @@ function logout() {
                                         <div class="card border-0 mb-0">
                                             <div class="card-header py-2">
                                                 <div class="products">
+                                                    <?php
+													$sql="SELECT profile_image FROM users WHERE id = ?";
+                                                    $stmt = $conn->prepare($sql);
+                                                    $stmt->bind_param("i", $_SESSION['id']);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result->num_rows > 0) {
+                                                        $row = $result->fetch_assoc();
+                                                        $profileImage = $row['profile_image'] ?? 'default-profile.jpg';
+                                                    } else {
+                                                        $profileImage = 'default-profile.jpg';
+                                                    }
+                                                    echo "<img src='uploads/users/" . htmlspecialchars($profileImage) . "' class='avatar avatar-md' alt='Profile'>";
+													?>
 
-                                                    <img src="uploads/users/<?= htmlspecialchars($_SESSION['profile_image'] ?? 'default-profile.jpg') ?>"
-                                                        class="avatar avatar-md" alt="Profile">
+                                                    
                                                     <div>
                                                         <?php 
 												// Display user's name and email from session
