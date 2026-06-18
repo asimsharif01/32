@@ -20,6 +20,7 @@ $mls            = esc($conn, $_POST['mls_number']               ?? '');
 $tn             = esc($conn, $_POST['transaction_number']        ?? '');
 $address1       = esc($conn, $_POST['address1']                  ?? '');
 $city           = esc($conn, $_POST['city']                      ?? '');
+$county         = esc($conn, $_POST['county']                    ?? '');
 $state          = esc($conn, $_POST['state']                     ?? 'UT');
 $zip            = esc($conn, $_POST['zip']                       ?? '');
 $prop_type_id   = intval($_POST['property_type_id']              ?? 0) ?: 'NULL';
@@ -108,6 +109,7 @@ if ($is_edit) {
             transaction_number          = '$tn',
             address1                    = '$address1',
             city                        = '$city',
+            county                      = '$county',
             state                       = '$state',
             zip                         = '$zip',
             property_type_id            = $prop_type_id,
@@ -159,7 +161,7 @@ if ($is_edit) {
 
     // Build column list and value list dynamically for INSERT
     // Core columns
-    $cols = "mls_number, transaction_number, address1, city, state, zip,
+    $cols = "mls_number, transaction_number, address1, city, county, state, zip,
              property_type_id, purchase_price, uc_price, final_price,
              financing_type_id, status_id, lead_source,
              earnest_money_amount, earnest_money_deposit_with,
@@ -174,7 +176,7 @@ if ($is_edit) {
              seller_name, seller_home_phone, seller_cell_phone1, seller_cell_phone2,
              seller_fax, seller_email1, seller_email2";
 
-    $vals = "'$mls', '$tn', '$address1', '$city', '$state', '$zip',
+    $vals = "'$mls', '$tn', '$address1', '$city', '$county', '$state', '$zip',
              $prop_type_id, $purchase_price, $uc_price, $final_price,
              $fin_type_id, $status_id, '$lead_source',
              $earnest_amt, '$earnest_with',

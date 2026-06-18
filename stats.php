@@ -92,6 +92,56 @@ $avg_dom = mysqli_fetch_assoc(mysqli_query($conn,"
       AND contract_date IS NOT NULL AND date_of_listing IS NOT NULL
 "))['d'] ?? 0;
 
+// ── Point 9: Days on Market detail — distribution breakdown ──────────────
+$dom_detail = [];
+$dom_res = mysqli_query($conn,"
+    SELECT
+        CASE WHEN SA_ForReport=1 THEN SA_Name ELSE LA_Name END AS agent,
+        l.address1, l.city, l.county,
+        l.mls_number,
+        l.date_of_listing,
+        l.contract_date,
+        DATEDIFF(l.contract_date, l.date_of_listing) AS days_on_market,
+        l.final_price
+    FROM listings l
+    WHERE l.status_id = $s_closed
+      AND l.closing_date BETWEEN '$from_esc' AND '$to_esc'
+      AND l.contract_date IS NOT NULL
+      AND l.date_of_listing IS NOT NULL
+    ORDER BY days_on_market ASC
+");
+while ($r = mysqli_fetch_assoc($dom_res)) $dom_detail[] = $r;
+
+// ── Point 10: City/County breakdown ──────────────────────────────────────
+$city_data   = [];
+$county_data = [];
+
+$city_res = mysqli_query($conn,"
+    SELECT
+        IFNULL(NULLIF(city,''),'Unknown')   AS location,
+        COUNT(*)                             AS closings,
+        SUM(final_price)                     AS volume
+    FROM listings
+    WHERE status_id=$s_closed
+      AND closing_date BETWEEN '$from_esc' AND '$to_esc'
+    GROUP BY location
+    ORDER BY closings DESC
+");
+while ($r = mysqli_fetch_assoc($city_res)) $city_data[] = $r;
+
+$county_res = mysqli_query($conn,"
+    SELECT
+        IFNULL(NULLIF(county,''),'Not Set')  AS location,
+        COUNT(*)                              AS closings,
+        SUM(final_price)                      AS volume
+    FROM listings
+    WHERE status_id=$s_closed
+      AND closing_date BETWEEN '$from_esc' AND '$to_esc'
+    GROUP BY location
+    ORDER BY closings DESC
+");
+while ($r = mysqli_fetch_assoc($county_res)) $county_data[] = $r;
+
 // Top agents in the period
 $top_agents = [];
 $ta_res = mysqli_query($conn,"
@@ -130,7 +180,7 @@ $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#08
         body { background:#f0f2f5; font-family:'Segoe UI',Arial,sans-serif; font-size:13px; }
 
         /* ── Screen layout ─────────────────────────────────────────── */
-        .page-wrap { max-width:960px; margin:30px auto; padding:0 16px; }
+        .page-wrap { margin:10px auto; padding:0 10px; }
 
         /* ── Filter card ───────────────────────────────────────────── */
         .filter-card {
@@ -214,26 +264,25 @@ $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#08
         .ab-track { height:5px; background:#e8ecf4; border-radius:3px; overflow:hidden; margin-top:3px; }
         .ab-fill  { height:100%; border-radius:3px; }
 
+        /* ── Location table ────────────────────────────────────────── */
+        .loc-tabs { display:flex; gap:6px; margin-bottom:12px; }
+        .loc-tab  { padding:4px 12px; border-radius:16px; font-size:.75rem; font-weight:600; border:1px solid #c8d4e8; cursor:pointer; color:#1e3a5f; background:#f5f7fb; }
+        .loc-tab.active { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+        .loc-panel { display:none; }
+        .loc-panel.active { display:block; }
+
+        /* ── DOM table ─────────────────────────────────────────────── */
+        .dom-fast   { color:#059669; font-weight:700; }
+        .dom-medium { color:#d97706; font-weight:700; }
+        .dom-slow   { color:#e11d48; font-weight:700; }
+
         /* ── Quick stats row ───────────────────────────────────────── */
         .quick-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
         .qs-item { background:#f8f9fc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; }
         .qs-num  { font-size:20px; font-weight:700; color:#0d1117; }
         .qs-lbl  { font-size:11px; color:#718096; text-transform:uppercase; letter-spacing:.4px; margin-top:2px; }
 
-        /* ── Print ─────────────────────────────────────────────────── */
-        @page { size:A4 portrait; margin:10mm 12mm; }
-        @media print {
-            * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-            body { background:#fff; padding:0; margin:0; }
-            .filter-card, .btn-print-pg { display:none !important; }
-            .page-wrap { max-width:100%; margin:0; padding:0; }
-            .rpt-card  { box-shadow:none; border-radius:0; padding:0; }
-            .kpi5      { gap:8px; }
-            .kpi-num   { font-size:22px; }
-            .two-col   { gap:14px; }
-            table      { font-size:10px; }
-            th,td      { padding:5px 6px; }
-        }
+        /* print handled by print_stats.php */
     </style>
 </head>
 <body>
@@ -245,43 +294,63 @@ $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#08
     </div>
 
     <div class="page-wrap">
+       <div class="d-flex" style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
 
-        <!-- ── Date range filter ─────────────────────────────────────── -->
-        <form method="GET" class="filter-card no-print">
-            <div>
-                <label>From Date</label>
-                <input type="date" name="from" value="<?= h($from) ?>">
-            </div>
-            <div>
-                <label>To Date</label>
-                <input type="date" name="to" value="<?= h($to) ?>">
-            </div>
-            <div>
-                <button type="submit" class="btn-filter">Apply Dates</button>
-            </div>
-            <!-- Quick range buttons -->
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
-                <?php
-                $quick = [
-                    'This Year'   => [date('Y-01-01'), date('Y-12-31')],
-                    'Last Year'   => [date('Y-01-01',strtotime('-1 year')), date('Y-12-31',strtotime('-1 year'))],
-                    'This Month'  => [date('Y-m-01'), date('Y-m-t')],
-                    'Last Month'  => [date('Y-m-01',strtotime('-1 month')), date('Y-m-t',strtotime('-1 month'))],
-                    'Last 90 Days'=> [date('Y-m-d',strtotime('-90 days')), date('Y-m-d')],
-                ];
-                foreach ($quick as $label => [$qf,$qt]):
-                    $active = ($from===$qf && $to===$qt) ? 'background:#1e3a5f;color:#fff;' : '';
-                ?>
+    <!-- ── Date range filter ─────────────────────────────────────── -->
+    <form method="GET" class="filter-card no-print" id="filterForm"
+        style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;width:100%;">
+
+        <div>
+            <label>From Date</label>
+            <input type="text" name="from" id="input_from"
+                value="<?= h($from) ?>"
+                placeholder="Select date" readonly
+                style="cursor:pointer;background:#fff;min-width:130px">
+        </div>
+
+        <div>
+            <label>To Date</label>
+            <input type="text" name="to" id="input_to"
+                value="<?= h($to) ?>"
+                placeholder="Select date" readonly
+                style="cursor:pointer;background:#fff;min-width:130px">
+        </div>
+
+        <div>
+            <button type="submit" class="btn-filter">Apply Dates</button>
+        </div>
+
+        <!-- Quick range buttons -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+            <?php
+            $quick = [
+                'This Year'   => [date('Y-01-01'), date('Y-12-31')],
+                'Last Year'   => [date('Y-01-01',strtotime('-1 year')), date('Y-12-31',strtotime('-1 year'))],
+                'This Month'  => [date('Y-m-01'), date('Y-m-t')],
+                'Last Month'  => [date('Y-m-01',strtotime('-1 month')), date('Y-m-t',strtotime('-1 month'))],
+                'Last 90 Days'=> [date('Y-m-d',strtotime('-90 days')), date('Y-m-d')],
+            ];
+
+            foreach ($quick as $label => [$qf,$qt]):
+                $active = ($from===$qf && $to===$qt)
+                    ? 'background:#1e3a5f;color:#fff;'
+                    : '';
+            ?>
                 <a href="?from=<?= $qf ?>&to=<?= $qt ?>"
-                   style="font-size:.75rem;padding:5px 10px;border-radius:16px;border:1px solid #c8d4e8;text-decoration:none;color:#1e3a5f;<?= $active ?>">
+                    style="font-size:.75rem;padding:5px 10px;border-radius:16px;border:1px solid #c8d4e8;text-decoration:none;color:#1e3a5f;<?= $active ?>">
                     <?= $label ?>
                 </a>
-                <?php endforeach; ?>
-            </div>
-            <button type="button" class="btn-print-pg"
-                onclick="window.print()">🖨️ Print / Save as PDF</button>
-        </form>
+            <?php endforeach; ?>
+        </div>
 
+        <button type="button" class="btn-print-pg"
+            onclick="window.open('print_stats.php?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>','_blank')">
+            🖨️ Print / Save as PDF
+        </button>
+
+    </form>
+
+</div>
 
         <!-- ── Report content ────────────────────────────────────────── -->
         <div class="rpt-card">
@@ -401,7 +470,8 @@ $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#08
                             <td>
                                 <div style="font-weight:600;color:#0d1117"><?= h($ag['aname']) ?></div>
                                 <div class="ab-track">
-                                    <div class="ab-fill" style="width:<?= round($ag['volume']/$max_v*100) ?>%;background:<?= $ac[$i%count($ac)] ?>"></div>
+                                    <div class="ab-fill" style="width:<?= ($max_v > 0 ? round(($ag['volume'] / $max_v) * 100) : 0) ?>%;
+background:<?= !empty($ac) ? $ac[$i % count($ac)] : '#ccc' ?>"></div>
                                 </div>
                             </td>
                             <td style="text-align:right;font-weight:700"><?= $ag['closed_count'] ?></td>
@@ -417,10 +487,181 @@ $lead_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#08
 
             </div>
 
+
+            <!-- ══ POINT 9: Average Days on Market ════════════════════ -->
+            <div style="margin-top:20px;padding-top:20px;border-top:1px solid #f0f2f5">
+                <div class="sec-title">Average Days on Market
+                    <span style="font-weight:400;font-size:10px;color:#718096;text-transform:none;letter-spacing:0;margin-left:8px">(Date of Listing → Contract Date)</span>
+                </div>
+                <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+                    <div class="qs-item" style="flex:1;min-width:130px">
+                        <div class="qs-num"><?= $avg_dom ? number_format($avg_dom,1) : '—' ?></div>
+                        <div class="qs-lbl">Avg Days on Market</div>
+                    </div>
+                    <?php
+                    $dom_fast   = count(array_filter($dom_detail, fn($r) => $r['days_on_market'] <= 14));
+                    $dom_medium = count(array_filter($dom_detail, fn($r) => $r['days_on_market'] > 14 && $r['days_on_market'] <= 30));
+                    $dom_slow   = count(array_filter($dom_detail, fn($r) => $r['days_on_market'] > 30));
+                    ?>
+                    <div class="qs-item" style="flex:1;min-width:130px">
+                        <div class="qs-num dom-fast"><?= $dom_fast ?></div>
+                        <div class="qs-lbl">Under 14 Days</div>
+                    </div>
+                    <div class="qs-item" style="flex:1;min-width:130px">
+                        <div class="qs-num dom-medium"><?= $dom_medium ?></div>
+                        <div class="qs-lbl">15–30 Days</div>
+                    </div>
+                    <div class="qs-item" style="flex:1;min-width:130px">
+                        <div class="qs-num dom-slow"><?= $dom_slow ?></div>
+                        <div class="qs-lbl">Over 30 Days</div>
+                    </div>
+                </div>
+                <?php if ($dom_detail): ?>
+                <table>
+                    <thead><tr>
+                        <th>Address</th><th>City</th><th>Agent</th>
+                        <th>List Date</th><th>Contract Date</th>
+                        <th style="text-align:right">Days</th>
+                        <th style="text-align:right">Sale Price</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($dom_detail as $row):
+                        $dv = intval($row['days_on_market']);
+                        $dc = $dv <= 14 ? 'dom-fast' : ($dv <= 30 ? 'dom-medium' : 'dom-slow');
+                    ?>
+                    <tr>
+                        <td><?= h($row['address1']) ?></td>
+                        <td><?= h($row['city']) ?></td>
+                        <td><?= h($row['agent']) ?></td>
+                        <td><?= $row['date_of_listing'] ? date('m/d/Y',strtotime($row['date_of_listing'])) : '—' ?></td>
+                        <td><?= $row['contract_date']   ? date('m/d/Y',strtotime($row['contract_date']))   : '—' ?></td>
+                        <td style="text-align:right" class="<?= $dc ?>"><?= $dv ?></td>
+                        <td style="text-align:right"><?= $row['final_price'] ? moneyAbbr($row['final_price']) : '—' ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php else: ?>
+                <p style="color:#718096;font-size:12px">No closed transactions with both list date and contract date in this period.</p>
+                <?php endif; ?>
+            </div>
+
+
+            <!-- ══ POINT 10: City / County Breakdown ══════════════════ -->
+            <div style="margin-top:20px;padding-top:20px;border-top:1px solid #f0f2f5">
+                <div class="sec-title">Closings by Location</div>
+                <?php
+                $loc_colors = ['#1e3a5f','#0d9488','#c9a84c','#d97706','#e11d48','#7c3aed','#0891b2','#059669'];
+                ?>
+                <div class="two-col">
+
+                    <!-- By City -->
+                    <div>
+                        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">By City</div>
+                        <?php if ($city_data):
+                            $max_city = max(array_column($city_data,'closings')) ?: 1; ?>
+                        <table>
+                            <thead><tr>
+                                <th>City</th>
+                                <th style="text-align:right">Closings</th>
+                                <th style="text-align:right">Volume</th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($city_data as $i => $row):
+                                $col = $loc_colors[$i % count($loc_colors)];
+                                $pct = round($row['closings']/$max_city*100);
+                            ?>
+                            <tr>
+                                <td>
+                                    <div style="font-weight:600;color:#0d1117"><?= h($row['location']) ?></div>
+                                    <div style="height:4px;background:#e8ecf4;border-radius:2px;margin-top:3px;overflow:hidden">
+                                        <div style="height:100%;background:<?= $col ?>;width:<?= $pct ?>%;border-radius:2px"></div>
+                                    </div>
+                                </td>
+                                <td style="text-align:right;font-weight:700"><?= $row['closings'] ?></td>
+                                <td style="text-align:right;font-size:11px;color:#4a5568"><?= moneyAbbr($row['volume']) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <?php else: ?>
+                        <p style="color:#718096;font-size:12px">No data.</p>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- By County -->
+                    <div>
+                        <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">By County</div>
+                        <?php
+                        $has_county = !empty(array_filter($county_data, fn($r) => $r['location'] !== 'Not Set'));
+                        if ($has_county):
+                            $max_county = max(array_column($county_data,'closings')) ?: 1; ?>
+                        <table>
+                            <thead><tr>
+                                <th>County</th>
+                                <th style="text-align:right">Closings</th>
+                                <th style="text-align:right">Volume</th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($county_data as $i => $row):
+                                $col = $loc_colors[$i % count($loc_colors)];
+                                $pct = round($row['closings']/$max_county*100);
+                            ?>
+                            <tr>
+                                <td>
+                                    <div style="font-weight:600;color:<?= $row['location']==='Not Set'?'#718096':'#0d1117' ?>"><?= h($row['location']) ?></div>
+                                    <div style="height:4px;background:#e8ecf4;border-radius:2px;margin-top:3px;overflow:hidden">
+                                        <div style="height:100%;background:<?= $col ?>;width:<?= $pct ?>%;border-radius:2px"></div>
+                                    </div>
+                                </td>
+                                <td style="text-align:right;font-weight:700"><?= $row['closings'] ?></td>
+                                <td style="text-align:right;font-size:11px;color:#4a5568"><?= moneyAbbr($row['volume']) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <?php else: ?>
+                        <div style="background:#fffbe6;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e">
+                            ⚠️ No county data yet. Add the <strong>County</strong> field when entering new transactions and it will appear here.
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                </div>
+            </div>
+
         </div><!-- /.rpt-card -->
     </div><!-- /.page-wrap -->
 </div><!-- /.content-body -->
 
 <?php include('footer.php'); ?>
+
+<!-- Flatpickr — replaces native date picker, no calendar-stays-open bug -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+// Flatpickr closes automatically on date select and never blocks form submission
+flatpickr('#input_from', {
+    dateFormat: 'Y-m-d',        // matches PHP date format used in queries
+    defaultDate: '<?= h($from) ?>',
+    allowInput: false,          // readonly — no typing, click only
+    disableMobile: true,        // use Flatpickr on mobile too (not native picker)
+    onChange: function(selectedDates, dateStr) {
+        // Auto-advance focus to To Date after selecting From Date
+        document.getElementById('input_to')._flatpickr.open();
+    }
+});
+
+flatpickr('#input_to', {
+    dateFormat: 'Y-m-d',
+    defaultDate: '<?= h($to) ?>',
+    allowInput: false,
+    disableMobile: true,
+    onClose: function() {
+        // Calendar closed — safe to submit now
+        // Nothing needed, user clicks Apply Dates normally
+    }
+});
+</script>
 </body>
 </html>

@@ -449,6 +449,22 @@ function logout() {
                         </a>
                     </li>
 
+                     <li><a href="stats.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 17H19" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M5 14L5 10" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M9 14L9 6" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M13 14L13 12" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M17 14L17 14.01" stroke="#888888" stroke-width="1.5"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Stats Report</span>
+                        </a>
+                    </li>
+
                     <li><a href="users.php" class="" aria-expanded="false">
                             <div class="menu-icon">
                                 <svg width="22" height="22" viewBox="0 0 22 22" fill="none"

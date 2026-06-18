@@ -234,13 +234,13 @@ function agentCard($title, $prefix, $r) {
             color: #0f2b3d;
         }
         .report-title-block p {
-            font-size: 12px;
+            font-size: 15px;
             color: #4b5563;
             margin-top: 2px;
         }
         .company-block {
             text-align: right;
-            font-size: 12px;
+            font-size: 15px;
             color: #4b5563;
         }
         .company-block .co-name {
@@ -273,7 +273,7 @@ function agentCard($title, $prefix, $r) {
         .info-row {
             display: flex;
             margin-bottom: 5px;
-            font-size: 12.5px;
+            font-size: 14.5px;
         }
         .il {                       /* info label */
             width: 145px;
@@ -300,7 +300,7 @@ function agentCard($title, $prefix, $r) {
             padding: 12px 14px;
         }
         .agent-card-title {
-            font-size: 12px;
+            font-size: 15px;
             font-weight: 700;
             color: #1e3a5f;
             text-transform: uppercase;
@@ -310,7 +310,7 @@ function agentCard($title, $prefix, $r) {
             margin-bottom: 8px;
         }
         .agent-row {
-            font-size: 12px;
+            font-size: 15px;
             margin-bottom: 3px;
             display: flex;
         }
@@ -332,7 +332,7 @@ function agentCard($title, $prefix, $r) {
             border: 1px solid #fde68a;
             border-radius: 6px;
             padding: 12px;
-            font-size: 12px;
+            font-size: 15px;
             white-space: pre-wrap;
             min-height: 60px;
         }
@@ -359,15 +359,15 @@ function agentCard($title, $prefix, $r) {
 
             /* ── Tighten every section ─────────────────────────────── */
             .section        { margin-bottom: 5px !important; }
-            .section-title  { padding: 2px 8px !important; margin-bottom: 5px !important; font-size: 9px !important; }
+            .section-title  { padding: 2px 8px !important; margin-bottom: 5px !important; font-size: 12px !important; }
             .report-header  { padding-bottom: 6px !important; margin-bottom: 8px !important; }
 
             /* ── Shrink typography ────────────────────────────────── */
-            body            { font-size: 8px !important; }
-            .report-title-block h1 { font-size: 13px !important; }
-            .company-block  { font-size: 8px !important; }
-            .company-block .co-name { font-size: 11px !important; }
-            .info-row       { margin-bottom: 2px !important; font-size: 8px !important; }
+            body            { font-size: 12px !important; }
+            .report-title-block h1 { font-size: 16px !important; }
+            .company-block  { font-size: 12px !important; }
+            .company-block .co-name { font-size: 14px !important; }
+            .info-row       { margin-bottom: 2px !important; font-size: 12px !important; }
             .il             { width: 110px !important; }
 
             /* ── Agent grid: 3 columns on A4 to fit all 5 cards ──── */
@@ -376,8 +376,8 @@ function agentCard($title, $prefix, $r) {
                 gap: 6px !important;
             }
             .agent-card     { padding: 6px 8px !important; }
-            .agent-card-title { font-size: 8px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; }
-            .agent-row      { font-size: 8px !important; margin-bottom: 2px !important; }
+            .agent-card-title { font-size: 12px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; }
+            .agent-row      { font-size: 12px !important; margin-bottom: 2px !important; }
             .al             { width: 65px !important; }
             .asst-divider   { margin: 3px 0 !important; }
 
@@ -391,7 +391,7 @@ function agentCard($title, $prefix, $r) {
             .two-col        { break-inside: avoid !important; }
 
             /* ── Comments ─────────────────────────────────────────── */
-            .comments-box   { padding: 5px !important; font-size: 8px !important; min-height: unset !important; }
+            .comments-box   { padding: 5px !important; font-size: 12px !important; min-height: unset !important; }
         }
     </style>
 </head>

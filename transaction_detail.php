@@ -153,6 +153,10 @@ function raw($data, $field, $default = '') {
                     <input type="text" name="state" class="form-control" maxlength="2" value="<?= val($listing,'state','UT') ?>"></div>
                 <div class="col-3"><label class="form-label">Zip</label>
                     <input type="text" name="zip" class="form-control" value="<?= val($listing,'zip') ?>"></div>
+                    <div class="col-4"><label class="form-label">County</label>
+                    <input type="text" name="county" class="form-control"
+                        placeholder="e.g. Utah County"
+                        value="<?= val($listing,'county') ?>"></div>
 
                 <div class="col-3"><label class="form-label">Purchase Price</label>
                     <input type="number" step="0.01" name="purchase_price" class="form-control" value="<?= val($listing,'purchase_price') ?>"></div>
