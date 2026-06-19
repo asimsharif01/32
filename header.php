@@ -376,7 +376,7 @@ function logout() {
         <div class="deznav">
             <div class="deznav-scroll">
                 <ul class="metismenu" id="menu">
-                    <li class="menu-title">Portal</li>
+                    <li class="menu-title">Real Estate Portal</li>
                     <li><a href="index.php" class="" aria-expanded="false">
                             <div class="menu-icon">
                                 <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
