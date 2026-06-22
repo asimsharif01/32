@@ -12,6 +12,18 @@ if (empty($_SESSION['auth'])) {
     header('Location: login.php');
     exit;
 }
+
+// ── Determine effective company for nav/dashboard rendering ──────────────
+// module='real_estate' -> always real_estate
+// module='mortgage'    -> always mortgage
+// module='both'        -> whatever was last picked via switch_company.php
+$userModule = $_SESSION['module'] ?? 'real_estate';
+if ($userModule === 'both') {
+    $activeCompany = $_SESSION['active_company'] ?? 'real_estate';
+} else {
+    $activeCompany = $userModule;
+    $_SESSION['active_company'] = $userModule; // keep in sync
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -274,6 +286,31 @@ function logout() {
                                 </div>
                             </li>
 
+                            <?php if ($userModule === 'both'): ?>
+                            <li class="nav-item ps-3">
+                                <div class="dropdown">
+                                    <a class="nav-link btn btn-sm" href="javascript:void(0);" role="button"
+                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                        style="background:#1e3a5f;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;">
+                                        <?= $activeCompany === 'mortgage' ? '🏦 Laser Lending' : '🏠 Larson & Co' ?>
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                            <path d="M2 4L6 8L10 4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a class="dropdown-item <?= $activeCompany === 'real_estate' ? 'active' : '' ?>"
+                                           href="switch_company.php?to=real_estate">
+                                            🏠 Larson &amp; Company
+                                        </a>
+                                        <a class="dropdown-item <?= $activeCompany === 'mortgage' ? 'active' : '' ?>"
+                                           href="switch_company.php?to=mortgage">
+                                            🏦 Laser Lending
+                                        </a>
+                                    </div>
+                                </div>
+                            </li>
+                            <?php endif; ?>
+
                             <li class="nav-item ps-3">
                                 <div class="dropdown header-profile2">
                                     <a class="nav-link" href="javascript:void(0);" role="button"
@@ -292,7 +329,7 @@ function logout() {
                                                     } else {
                                                         $profileImage = 'default-profile.jpg';
                                                     }
-                                                    echo "<img src='uploads/users/" . htmlspecialchars($profileImage) . "' class='avatar avatar-md' alt='Profile'>";
+                                                    echo "<img src='uploads/users/" . htmlspecialchars($profileImage) . "' class='avatar avatar-md' alt='Profile' style='width: 28px;height: 26px;margin-left: -5px;'>";
 													?>
                                                 
                                                
@@ -376,6 +413,7 @@ function logout() {
         <div class="deznav">
             <div class="deznav-scroll">
                 <ul class="metismenu" id="menu">
+                <?php if ($activeCompany === 'real_estate'): ?>
                     <li class="menu-title">Real Estate Portal</li>
                     <li><a href="index.php" class="" aria-expanded="false">
                             <div class="menu-icon">
@@ -558,6 +596,150 @@ function logout() {
                         </a>
                     </li>
 
+                <?php else: // $activeCompany === 'mortgage' ?>
+                    <li class="menu-title">Laser Lending Portal</li>
+
+                    <li><a href="lending_dashboard.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 8.5L11 2L19 8.5V18C19 18.6 18.6 19 18 19H4C3.4 19 3 18.6 3 18V8.5Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M8 19V11H14V19" stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Dashboard</span>
+                        </a>
+                    </li>
+
+                    <li><a href="lending_loans.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M14 7C15.5 7 16.5 8 16.5 9.5" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M17 13C18.5 13.5 19 14 19 15.5" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M11 13C8.5 13 6 13.5 6 16C6 17 8 17.5 11 17.5C14 17.5 16 17 16 16C16 13.5 13.5 13 11 13Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M11 10C12.933 10 14.5 8.433 14.5 6.5C14.5 4.567 12.933 3 11 3C9.067 3 7.5 4.567 7.5 6.5C7.5 8.433 9.067 10 11 10Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Info</span>
+                        </a>
+                    </li>
+
+                    <li><a href="lending_report.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M4 3H18C18.6 3 19 3.4 19 4V18C19 18.6 18.6 19 18 19H4C3.4 19 3 18.6 3 18V4C3 3.4 3.4 3 4 3Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M7 14L9.5 10L12.5 13L16 8" stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M15 14H7" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Reports</span>
+                        </a>
+                    </li>
+
+                    <li><a href="users.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M7 13C5 13 3 13.5 3 15.5C3 16.5 4.5 17 7 17C9.5 17 11 16.5 11 15.5C11 13.5 9 13 7 13Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M7 10.5C8.4 10.5 9.5 9.4 9.5 8C9.5 6.6 8.4 5.5 7 5.5C5.6 5.5 4.5 6.6 4.5 8C4.5 9.4 5.6 10.5 7 10.5Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M16 13C15 13 13.5 13.5 13.5 15C13.5 16 14.5 16.5 16 16.5C17.5 16.5 18.5 16 18.5 15C18.5 13.5 17 13 16 13Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M16 11C17.1 11 18 10.1 18 9C18 7.9 17.1 7 16 7C14.9 7 14 7.9 14 9C14 10.1 14.9 11 16 11Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">System Users</span>
+                        </a>
+                    </li>
+
+                    <hr>
+                    <li class="menu-title">System Listings</li>
+
+                    <li><a href="loan_consultants.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="11" cy="7" r="3" stroke="#888888" stroke-width="1.5" />
+                                    <path d="M5 18C5 14.5 7.5 13 11 13C14.5 13 17 14.5 17 18" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Consultants</span>
+                        </a>
+                    </li>
+
+                    <li><a href="loan_processors.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="3" y="5" width="16" height="12" rx="1.5" stroke="#888888" stroke-width="1.5" />
+                                    <path d="M3 9H19" stroke="#888888" stroke-width="1.5" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Processors</span>
+                        </a>
+                    </li>
+
+                    <li><a href="loan_statuses.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 19H19" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M5 16L5 10" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M9 16L9 6" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M13 16L13 12" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <path d="M17 16L17 14" stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Statuses</span>
+                        </a>
+                    </li>
+
+                    <li><a href="loan_types.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 8L11 2L20 8V18C20 18.6 19.6 19 19 19H3C2.4 19 2 18.6 2 18V8Z"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Types</span>
+                        </a>
+                    </li>
+
+                    <li><a href="purchase_types.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 1V5M11 17V21M4 11H1M21 11H17M5.5 5.5L8.5 8.5M13.5 13.5L16.5 16.5M16.5 5.5L13.5 8.5M8.5 13.5L5.5 16.5"
+                                        stroke="#888888" stroke-width="1.5" stroke-linecap="round" />
+                                    <circle cx="11" cy="11" r="3" stroke="#888888" stroke-width="1.5" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Purchase Types</span>
+                        </a>
+                    </li>
+
+                    <li><a href="loan_role_types.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="3" y="3" width="7" height="7" rx="1" stroke="#888888" stroke-width="1.5" />
+                                    <rect x="12" y="12" width="7" height="7" rx="1" stroke="#888888" stroke-width="1.5" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Loan Role Types</span>
+                        </a>
+                    </li>
+
+                    <li><a href="loan_referral_sources.php" class="" aria-expanded="false">
+                            <div class="menu-icon">
+                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 5H19L12 12V19L10 17V12L3 5Z" stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <span class="nav-text">Referral Sources</span>
+                        </a>
+                    </li>
+
+                <?php endif; ?>
                 </ul>
             </div>
         </div>

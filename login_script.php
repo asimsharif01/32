@@ -51,7 +51,22 @@ $_SESSION['module'] = $user['module'];  // 'real_estate' | 'mortgage' | 'both'
 $_SESSION['auth']   = true;             // single flag checked by header.php
 $_SESSION['profile_image'] = $user['profile_image']; // for session timeout
 
-// ── Redirect based on role ────────────────────────────────────────────────
-// All roles go to index.php — the dashboard controls what each role sees
-header('Location: index.php');
+// ── Set active_company — controls which nav/dashboard is shown ───────────
+if ($user['module'] === 'real_estate') {
+    $_SESSION['active_company'] = 'real_estate';
+} elseif ($user['module'] === 'mortgage') {
+    $_SESSION['active_company'] = 'mortgage';
+} else {
+    // module === 'both' — restore last choice from cookie, default real_estate
+    $_SESSION['active_company'] = ($_COOKIE['active_company'] ?? '') === 'mortgage'
+        ? 'mortgage'
+        : 'real_estate';
+}
+
+// ── Redirect based on active_company ──────────────────────────────────────
+if ($_SESSION['active_company'] === 'mortgage') {
+    header('Location: lending_dashboard.php');
+} else {
+    header('Location: index.php');
+}
 exit;

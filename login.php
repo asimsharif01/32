@@ -124,7 +124,7 @@
                 <div class="col-lg-6 col-md-12 col-sm-12 mx-auto align-self-center">
                     <div class="login-form">
                         <div class="text-center">
-                          <img src="images/logo.png" width="200" alt="Logo" class="mb-4">
+                          <img src="images/lrs.png" width="200" alt="Logo" class="mb-4">
                             <h3 class="title">Sign In</h3>
                             <p>Sign in to your account to start using CRM</p>
                         </div>
