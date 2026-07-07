@@ -144,8 +144,8 @@ function selected($val, $current) {
                     <div class="section-title">Loan Identifiers</div>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Transaction #</label>
-                            <input type="text" name="transaction_no" class="form-control" maxlength="10"
+                            <label class="form-label">Lender</label>
+                            <input type="text" name="transaction_no" class="form-control"
                                 value="<?= v($loan, 'transaction_no') ?>">
                         </div>
                         <?php if (!$is_create): ?>
@@ -309,14 +309,14 @@ function selected($val, $current) {
                             value="<?= v($loan, 'loan_2_amount') ?>">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 d-none">
                     <label class="form-label">LO Revenue</label>
                     <div class="input-group"><span class="input-group-text">$</span>
                         <input type="text" name="lo_revenue" class="form-control money-input"
                             value="<?= v($loan, 'lo_revenue') ?>">
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 d-none">
                     <label class="form-label">Processing Fee</label>
                     <div class="input-group"><span class="input-group-text">$</span>
                         <input type="text" name="processing_fee" class="form-control money-input"
@@ -335,7 +335,7 @@ function selected($val, $current) {
                     <input type="text" name="date_submitted" class="form-control flatpickr-date"
                         value="<?= v($loan, 'date_submitted') ?>" placeholder="Select date" readonly>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 d-none">
                     <label class="form-label">Approved Date</label>
                     <input type="text" name="approved_date" class="form-control flatpickr-date"
                         value="<?= v($loan, 'approved_date') ?>" placeholder="Select date" readonly>
@@ -345,7 +345,7 @@ function selected($val, $current) {
                     <input type="text" name="date_welcome_docs" class="form-control flatpickr-date"
                         value="<?= v($loan, 'date_welcome_docs') ?>" placeholder="Select date" readonly>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 d-none">
                     <label class="form-label">To Docs Date</label>
                     <input type="text" name="to_docs_date" class="form-control flatpickr-date"
                         value="<?= v($loan, 'to_docs_date') ?>" placeholder="Select date" readonly>

@@ -51,7 +51,7 @@ while ($row = mysqli_fetch_assoc($res)) $statuses[] = $row;
 
                         <!-- Trans # -->
                         <div class="col">
-                            <input type="text" name="trans_no" class="form-control" placeholder="Trans #"
+                            <input type="text" name="trans_no" class="form-control" placeholder="Lender"
                                    value="<?= htmlspecialchars($_GET['trans_no'] ?? '') ?>">
                         </div>
 
@@ -102,7 +102,7 @@ while ($row = mysqli_fetch_assoc($res)) $statuses[] = $row;
                     <thead>
                         <tr>
                             <th>Action</th>
-                            <th>Trans #</th>
+                            <th>Lender</th>
                             <th>Borrower Name</th>
                             <th>Loan Consultant</th>
                             <th>Loan Processor</th>

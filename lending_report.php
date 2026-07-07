@@ -67,6 +67,46 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
         .totals-box .t-val { font-size:1.3rem; font-weight:700; color:#1e3a5f; }
         .totals-box .t-lbl { font-size:.75rem; color:#6c757d; }
         @media(max-width:900px){ .prog-grid{grid-template-columns:1fr;} .ytd-box .ytd-grid{grid-template-columns:1fr 1fr;} }
+
+        /* ── Fixed column widths ──────────────────────────────────────────
+           Each report renders ONE <table> per sub-group (per consultant,
+           per loan type, per referral source, etc). Browsers auto-size
+           table columns independently per <table> based on that table's
+           own content — so when several of these tables stack vertically,
+           their columns drift out of alignment if the content lengths
+           differ between groups (e.g. a long borrower name in one group,
+           a short one in the next). table-layout:fixed + explicit
+           percentage widths forces every table for a given report to use
+           IDENTICAL column proportions regardless of content. */
+        .tbl-funded, .tbl-company           { table-layout: fixed; width: 100%; }
+        .tbl-funded th:nth-child(1), .tbl-company th:nth-child(1)  { width: 27%; }
+        .tbl-funded th:nth-child(2), .tbl-company th:nth-child(2)  { width: 13%; }
+        .tbl-funded th:nth-child(3), .tbl-company th:nth-child(3)  { width: 15%; }
+        .tbl-funded th:nth-child(4), .tbl-company th:nth-child(4)  { width: 17%; }
+        .tbl-funded th:nth-child(5), .tbl-company th:nth-child(5)  { width: 16%; }
+        .tbl-funded th:nth-child(6), .tbl-company th:nth-child(6)  { width: 12%; }
+
+        .tbl-perType { table-layout: fixed; width: 100%; }
+        .tbl-perType th:nth-child(1) { width: 40%; }
+        .tbl-perType th:nth-child(2) { width: 20%; }
+        .tbl-perType th:nth-child(3) { width: 20%; }
+        .tbl-perType th:nth-child(4) { width: 20%; }
+
+        .tbl-referral { table-layout: fixed; width: 100%; }
+        .tbl-referral th:nth-child(1) { width: 50%; }
+        .tbl-referral th:nth-child(2) { width: 25%; }
+        .tbl-referral th:nth-child(3) { width: 25%; }
+
+        .tbl-consultant { table-layout: fixed; width: 100%; }
+        .tbl-consultant th:nth-child(1) { width: 8%; }
+        .tbl-consultant th:nth-child(2) { width: 42%; }
+        .tbl-consultant th:nth-child(3) { width: 25%; }
+        .tbl-consultant th:nth-child(4) { width: 25%; }
+
+        /* table-layout:fixed needs explicit wrapping since columns can no
+           longer grow to fit a long unbroken name/value */
+        .tbl-funded td, .tbl-company td, .tbl-perType td,
+        .tbl-referral td, .tbl-consultant td { word-wrap: break-word; overflow-wrap: break-word; }
     </style>
 </head>
 <body>
@@ -191,7 +231,7 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
                 $sub_total = array_sum(array_column($rows, 'loan_total'));
             ?>
             <div class="sub-hdr"><?= h($consultant) ?> (<?= count($rows) ?>)</div>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered tbl-funded">
                 <thead><tr><th>Borrower</th><th>Funded</th><th>Loan Total</th><th>Loan Type</th><th>Purchase/Refinance</th><th>Brokered/Warehouse</th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>
@@ -265,7 +305,7 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
                 $sub_total = array_sum(array_column($rows, 'loan_total'));
             ?>
             <p style="font-weight:600;font-size:.85rem;margin:8px 0 4px"><?= h($purchase) ?> (<?= count($rows) ?>)</p>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered tbl-perType">
                 <thead><tr><th>Borrower</th><th>Funded</th><th>Loan Total</th><th>Brokered/Warehouse</th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>
@@ -327,7 +367,7 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
             ?>
             <div class="sub-hdr"><?= h($label) ?> (<?= count($rows) ?>)</div>
             <?php if ($rows): ?>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered tbl-company">
                 <thead><tr><th>Consultant</th><th><?= $label ?> Date</th><th>Loan Total</th><th>Loan Type</th><th>Purchase/Refinance</th><th>Brokered/Warehouse</th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>
@@ -481,7 +521,7 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
 
             <?php foreach ($grouped as $source => $rows): ?>
             <div class="sub-hdr"><?= h($source) ?></div>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered tbl-referral">
                 <thead><tr><th>Borrower</th><th>Loan Amount</th><th>Status</th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>
@@ -555,7 +595,7 @@ while ($r = mysqli_fetch_assoc($cr)) $consultants[] = $r;
             <?php foreach (['Welcome Docs' => $welcome_rows, 'Submitted' => $submitted_rows, 'Funded' => $funded_rows] as $label => $rows): ?>
             <div class="sub-hdr"><?= h($label) ?></div>
             <?php if ($rows): ?>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered tbl-consultant">
                 <thead><tr><th>#</th><th>Borrower Name</th><th>Date</th><th>Loan Total</th></tr></thead>
                 <tbody>
                 <?php foreach ($rows as $i => $r): ?>

@@ -40,11 +40,7 @@ $excelFile = __DIR__ . '/Loan_Info.xlsx';
 //   5 (112 loans, has submit dates, rarely closes, $0 fee) = Submitted
 //   1 and 4 are too rare (4 and 9 loans) to confirm with confidence
 $statusNameMap = [
-    '1' => 'Unknown (Status 1)',
     '2' => 'Funded',
-    '3' => 'Rescinded',
-    '4' => 'Unknown (Status 4)',
-    '5' => 'Submitted',
 ];
 
 // Access Loan_ConsultantID -> real name, from Loan_Consultants.xlsx export

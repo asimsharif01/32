@@ -101,7 +101,11 @@ function logout() {
         ***********************************-->
         <div class="nav-header">
             <a href="index.php" class="brand-logo">
+                <?php if ($activeCompany === 'real_estate'): ?>
                 <img src="images/logo.png" width="130">
+                <?php else: // $activeCompany === 'mortgage' ?>
+                    <img src="images/laserlending.png" width="150">
+                      <?php endif; ?>
             </a>
             <div class="nav-control">
                 <div class="hamburger">

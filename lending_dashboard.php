@@ -324,7 +324,7 @@ function fmtD($d) { return ($d && $d != '0000-00-00') ? date('M j', strtotime($d
             <div class="kpi-label">Active Pipeline</div>
             <div class="kpi-sub">Total loans <span><?= $total_loans ?></span></div>
         </div>
-        <div class="kpi green">
+        <div class="kpi green d-none">
             <div class="kpi-icon">💵</div>
             <div class="kpi-val"><?= fmtMoney($revenue_year, true) ?></div>
             <div class="kpi-label">Revenue Earned <?= $period_label ?></div>

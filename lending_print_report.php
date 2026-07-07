@@ -217,6 +217,39 @@ if ($tab === 'consultant' && $consultant_id) {
         .prog-month { font-weight:700;color:#1e3a5f;font-size:11px;margin-top:8px; }
         .prog-row,.prog-total { display:flex;justify-content:space-between;font-size:11px;padding:1px 0; }
         .prog-total { font-weight:700;border-top:1px solid #e2e8f0;margin-top:2px;padding-top:3px; }
+
+        /* ── Fixed column widths — same fix as lending_reports.php ──────
+           Each report renders one <table> per sub-group; without explicit
+           widths, columns drift out of alignment between stacked tables
+           when content length differs between groups. */
+        .tbl-funded, .tbl-company           { table-layout: fixed; }
+        .tbl-funded th:nth-child(1), .tbl-company th:nth-child(1)  { width: 27%; }
+        .tbl-funded th:nth-child(2), .tbl-company th:nth-child(2)  { width: 13%; }
+        .tbl-funded th:nth-child(3), .tbl-company th:nth-child(3)  { width: 15%; }
+        .tbl-funded th:nth-child(4), .tbl-company th:nth-child(4)  { width: 17%; }
+        .tbl-funded th:nth-child(5), .tbl-company th:nth-child(5)  { width: 16%; }
+        .tbl-funded th:nth-child(6), .tbl-company th:nth-child(6)  { width: 12%; }
+
+        .tbl-perType { table-layout: fixed; }
+        .tbl-perType th:nth-child(1) { width: 40%; }
+        .tbl-perType th:nth-child(2) { width: 20%; }
+        .tbl-perType th:nth-child(3) { width: 20%; }
+        .tbl-perType th:nth-child(4) { width: 20%; }
+
+        .tbl-referral { table-layout: fixed; }
+        .tbl-referral th:nth-child(1) { width: 50%; }
+        .tbl-referral th:nth-child(2) { width: 25%; }
+        .tbl-referral th:nth-child(3) { width: 25%; }
+
+        .tbl-consultant { table-layout: fixed; }
+        .tbl-consultant th:nth-child(1) { width: 8%; }
+        .tbl-consultant th:nth-child(2) { width: 42%; }
+        .tbl-consultant th:nth-child(3) { width: 25%; }
+        .tbl-consultant th:nth-child(4) { width: 25%; }
+
+        .tbl-funded td, .tbl-company td, .tbl-perType td,
+        .tbl-referral td, .tbl-consultant td { word-wrap: break-word; overflow-wrap: break-word; }
+
         @page { size:A4 portrait; margin:10mm 12mm; }
         @media print {
             * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -259,7 +292,7 @@ if ($tab === 'consultant' && $consultant_id) {
             $sub_total = array_sum(array_column($rows, 'loan_total'));
         ?>
         <div class="sec-title"><?= h($consultant) ?> (<?= count($rows) ?>)</div>
-        <table>
+        <table class="tbl-funded">
             <thead><tr><th>Borrower</th><th>Funded</th><th>Loan Total</th><th>Loan Type</th><th>Purchase/Refinance</th><th>Brokered/Warehouse</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $r): ?>
@@ -282,7 +315,7 @@ if ($tab === 'consultant' && $consultant_id) {
             $sub_total = array_sum(array_column($rows, 'loan_total'));
         ?>
         <p style="font-weight:600;font-size:11px;margin:6px 0 3px"><?= h($purchase) ?> (<?= count($rows) ?>)</p>
-        <table>
+        <table class="tbl-perType">
             <thead><tr><th>Borrower</th><th>Funded</th><th>Loan Total</th><th>Brokered/Warehouse</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $r): ?>
@@ -300,7 +333,7 @@ if ($tab === 'consultant' && $consultant_id) {
         ?>
         <div class="sec-title"><?= h($label) ?> (<?= count($rows) ?>)</div>
         <?php if ($rows): ?>
-        <table>
+        <table class="tbl-company">
             <thead><tr><th>Consultant</th><th><?= $label ?> Date</th><th>Loan Total</th><th>Loan Type</th><th>Purchase/Refinance</th><th>Brokered/Warehouse</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $r): ?>
@@ -346,7 +379,7 @@ if ($tab === 'consultant' && $consultant_id) {
         <?php endif; ?>
         <?php foreach ($grouped as $source => $rows): ?>
         <div class="sec-title"><?= h($source) ?></div>
-        <table>
+        <table class="tbl-referral">
             <thead><tr><th>Borrower</th><th>Loan Amount</th><th>Status</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $r): ?>
@@ -367,7 +400,7 @@ if ($tab === 'consultant' && $consultant_id) {
         <?php foreach (['Welcome Docs' => $welcome_rows, 'Submitted' => $submitted_rows, 'Funded' => $funded_rows_c] as $label => $rows): ?>
         <div class="sec-title"><?= h($label) ?></div>
         <?php if ($rows): ?>
-        <table>
+        <table class="tbl-consultant">
             <thead><tr><th>#</th><th>Borrower Name</th><th>Date</th><th>Loan Total</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $i => $r): ?>

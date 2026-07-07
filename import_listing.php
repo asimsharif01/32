@@ -1,542 +1,310 @@
 <?php
+// import_listings_fixed.php
+// Imports PropertyTb.xlsx into the listings table and populates
+// listing_milestones correctly.
+//
+// PROBLEMS THIS FIXES vs the previous import:
+//
+// 1. MILESTONE DATES were never written to listings because the columns
+//    (seller_disclosure_date, due_diligence_date, financing_appraisal_date,
+//    settlement_date) do NOT exist on the listings table — those were
+//    assumed but never created. This script writes deadlines directly
+//    into listing_milestones from the Excel source, bypassing listings
+//    entirely.
+//
+// 2. SETTLEMENT DATE: Access's Settlement_Deadline_Date is 100% NULL.
+//    The real settlement date is Closing_Date. This script maps
+//    'Settlement' → Closing_Date (same date used in all Access reports).
+//
+// 3. FINANCING & APPRAISAL: Access calls it Funding_and_Appraisal,
+//    completely different name. Correctly mapped here.
+//
+// 4. STATUS MISMATCH: Access stores "Closed"/"Rescinded"/"Listed"/
+//    "Under Contract" as plain text. This script looks up the matching
+//    status_id from sales_statuses by name (case-insensitive).
+//
+// 5. DATES as raw Excel serials: toArray() $formatData=false avoids the
+//    formatted-string-parsing bug that caused NULL dates in the loan import.
+//
+// BEFORE RUNNING:
+//   - Run cleanup: TRUNCATE TABLE listings; TRUNCATE TABLE listing_milestones;
+//   - Place PropertyTb.xlsx in the same folder as this script
+//   - Run from browser: http://localhost/032/import_listings_fixed.php
+
 require_once 'vendor/autoload.php';
+require_once 'db.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 set_time_limit(0);
 
-// Database connection using MySQLi
-$host = 'localhost';
-$dbname = '032';
-$username = 'root';
-$password = '';
-
-$mysqli = new mysqli($host, $username, $password, $dbname);
-
-if ($mysqli->connect_error) {
-    die("❌ Database connection failed: " . $mysqli->connect_error . "\n");
+if (session_status() === PHP_SESSION_NONE) session_start();
+if (empty($_SESSION['auth']) || $_SESSION['role'] !== 'super_admin') {
+    die('Access denied.');
 }
 
-$mysqli->set_charset("utf8mb4");
-echo "✅ Database connected successfully\n";
+echo "<h2>Listings Import (Fixed Version)</h2><pre>";
 
-// Helper function to clean string values
-function cleanValue($value) {
-    if ($value === null || $value === '') {
-        return null;
+$excelFile = __DIR__ . '/PropertyTb.xlsx';
+if (!file_exists($excelFile)) die("ERROR: PropertyTb.xlsx not found.");
+
+// ── Load lookup tables ────────────────────────────────────────────────────
+function loadLookup($conn, $table, $nameCol = 'description') {
+    $map = [];
+    $res = mysqli_query($conn, "SELECT id, `$nameCol` FROM `$table`");
+    while ($row = mysqli_fetch_assoc($res)) {
+        $map[strtolower(trim($row[$nameCol]))] = intval($row['id']);
     }
-    $value = str_replace(["\r\n", "\r", "\n", '_x000d_'], ' ', (string)$value);
-    $value = preg_replace('/\s+/', ' ', $value);
-    return trim($value);
+    return $map;
 }
 
-// Helper function to escape strings for MySQL
-function escapeString($mysqli, $value) {
-    if ($value === null || $value === '') {
-        return 'NULL';
-    }
-    if (is_numeric($value)) {
-        return (string)$value;
-    }
-    return "'" . $mysqli->real_escape_string((string)$value) . "'";
-}
+// sales_statuses uses 'description' column
+$statusMap = loadLookup($conn, 'sales_statuses', 'description');
+// Map Access text values → sales_statuses names (case insensitive)
+$accessStatusMap = [
+    'closed'         => 'closed',
+    'rescinded'      => 'rescinded',
+    'listed'         => 'listed',
+    'under contract' => 'under contract',
+];
+echo "Statuses loaded: " . implode(', ', array_keys($statusMap)) . "\n";
 
-// Helper function to parse date
-function parseDate($value) {
-    if ($value === null || $value === '' || $value === 'False' || $value === 'false') {
-        return null;
-    }
-    
-    // If it's a numeric Excel date
-    if (is_numeric($value)) {
+$finTypeMap   = loadLookup($conn, 'financing_types',  'description');
+$propTypeMap  = loadLookup($conn, 'property_types',   'description');
+$leadSrcMap   = loadLookup($conn, 'lead_sources',     'description');
+echo "Lookups loaded.\n";
+
+// ── Date helpers ────────────────────────────────────────────────────────────
+function parseExcelDate($value) {
+    if ($value === null || $value === '' || $value === false) return null;
+    if (is_numeric($value) && $value > 1) {
         try {
-            $timestamp = ExcelDate::excelToTimestamp($value);
-            return date('Y-m-d', $timestamp);
-        } catch (Exception $e) {
-            return null;
-        }
+            $dt = ExcelDate::excelToDateTimeObject((float)$value);
+            return $dt->format('Y-m-d');
+        } catch (Exception $e) { return null; }
     }
-    
-    // If it's a string date
-    $date = trim((string)$value);
-    if (strlen($date) >= 10) {
-        $formats = ['d/m/Y', 'm/d/Y', 'Y-m-d', 'd-m-Y', 'm-d-Y'];
-        foreach ($formats as $format) {
-            $dt = DateTime::createFromFormat($format, $date);
-            if ($dt !== false) {
-                return $dt->format('Y-m-d');
-            }
-        }
-        $timestamp = strtotime($date);
-        if ($timestamp !== false) {
-            return date('Y-m-d', $timestamp);
-        }
-    }
-    return null;
+    $str = trim((string)$value);
+    if ($str === '' || strtoupper($str) === 'NULL') return null;
+    $ts = strtotime($str);
+    return ($ts !== false) ? date('Y-m-d', $ts) : null;
 }
 
-// Helper function to parse financial values
-function parseFinancial($value) {
-    if ($value === null || $value === '') {
-        return null;
-    }
-    $clean = str_replace(['$', ','], '', (string)$value);
-    if (is_numeric($clean)) {
-        return (float)$clean;
-    }
-    return null;
+function parseMoney($v) {
+    if ($v === null || $v === '') return null;
+    $clean = str_replace(['$',',',' '], '', (string)$v);
+    return is_numeric($clean) ? floatval($clean) : null;
 }
 
-// Helper function to parse percentage values
-function parsePercentage($value) {
-    if ($value === null || $value === '') {
-        return null;
-    }
-    $clean = str_replace(['%', ','], '', (string)$value);
-    if (is_numeric($clean)) {
-        return (float)$clean;
-    }
-    return null;
+function parsePhone($v) {
+    if ($v === null || $v === '') return null;
+    $n = preg_replace('/[^0-9]/', '', (string)floatval($v));
+    return strlen($n) >= 7 ? $n : null;
 }
 
-// Helper function to get lookup ID from description
-function getLookupId($mysqli, $table, $description, $createIfMissing = false) {
-    if (empty($description) || $description === '' || $description === 'N/A' || $description === 'TBD') {
-        return null;
-    }
-    
-    $desc = cleanValue($description);
-    if (empty($desc)) return null;
-    
-    $stmt = $mysqli->prepare("SELECT id FROM `$table` WHERE description = ?");
-    $stmt->bind_param('s', $desc);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($row = $result->fetch_assoc()) {
-        return $row['id'];
-    }
-    
-    if ($createIfMissing) {
-        $stmt = $mysqli->prepare("INSERT INTO `$table` (description) VALUES (?)");
-        $stmt->bind_param('s', $desc);
-        if ($stmt->execute()) {
-            return $mysqli->insert_id;
-        }
-    }
-    
-    return null;
+function esc($conn, $v) {
+    if ($v === null) return null;
+    return mysqli_real_escape_string($conn, (string)$v);
 }
 
-// Map property types
-function getPropertyTypeId($mysqli, $typeDesc) {
-    $typeMap = [
-        'Single Family' => 'Single Family',
-        'Condominium' => 'Condominium',
-        'Townhouse' => 'Townhouse',
-        'duplex' => 'duplex',
-        '4-plex' => '4-plex',
-        'New Construction' => 'New Construction',
-        'Vacant Lot' => 'Vacant Lot'
-    ];
-    
-    $desc = cleanValue($typeDesc);
-    if (isset($typeMap[$desc])) {
-        return getLookupId($mysqli, 'property_types', $typeMap[$desc]);
-    }
-    return null;
+function nullOrStr($v) {
+    $v = trim((string)($v ?? ''));
+    return $v === '' || strtoupper($v) === 'NAN' ? null : $v;
 }
 
-// Map financing types
-function getFinancingTypeId($mysqli, $typeDesc) {
-    $typeMap = [
-        'Conventional' => 'Conventional',
-        'FHA' => 'FHA',
-        'VA' => 'VA',
-        'Cash' => 'Cash',
-        'USDA' => 'USDA',
-        'Rural Housing' => 'Rural Housing',
-        'Seller Financing' => 'Seller Financing',
-        'TBD' => 'TBD',
-        'Conv/FHA' => 'Conv/FHA',
-        'Rural Loan' => 'Rural Loan',
-        'Private' => 'Private'
-    ];
-    
-    $desc = cleanValue($typeDesc);
-    if (isset($typeMap[$desc])) {
-        return getLookupId($mysqli, 'financing_types', $typeMap[$desc]);
-    }
-    return null;
+// ── milestone_type → [Access column, NA-flag column] ─────────────────────
+// CRITICAL CORRECTION:
+//   'Settlement' → Closing_Date (NOT Settlement_Deadline_Date which is 100% NULL)
+//   'Financing & Appraisal' → Funding_and_Appraisal (different name in Access)
+$milestoneMap = [
+    'Date of Contract'      => ['Contract_Date',         'Contract_DateNA'],
+    'Seller Disclosure'     => ['Sellers_Disclosure_Date','Sellers_Disclosure_DateNA'],
+    'Due Diligence'         => ['Due_Diligence_Deadline', 'Due_Diligence_DeadlineNA'],
+    'Financing & Appraisal' => ['Funding_and_Appraisal',  'Funding_and_AppraisalNA'],
+    'Settlement'            => ['Closing_Date',           'Closing_DateNA'],
+];
+
+// ── Milestone type and completion column on listing_milestones
+//    (no 'completed' or 'seller_disclosure_completed' flags exist on
+//     the listings table — milestone_milestones has its own 'completed' col)
+
+// ── Load Excel ──────────────────────────────────────────────────────────────
+$spreadsheet = IOFactory::load($excelFile);
+$ws = $spreadsheet->getActiveSheet();
+// formatData=false: get raw values so dates come as Excel serials, not strings
+$rows = $ws->toArray(null, true, false, false);
+$header = array_shift($rows);
+$colIndex = array_flip($header);
+
+echo "Excel loaded: " . count($rows) . " rows, " . count($header) . " columns.\n";
+echo "----------------------------------------\n";
+
+$imported = 0;
+$skipped  = 0;
+$errors   = [];
+$milestoneRows = 0;
+
+$conn->begin_transaction();
+
+// ── Helper: get a cell value by column name, return null if empty/NaN ──────
+function col($row, $colIndex, $name) {
+    $idx = $colIndex[$name] ?? null;
+    if ($idx === null) return null;
+    $v = $row[$idx] ?? null;
+    return ($v === null || trim((string)$v) === '' || strtolower(trim((string)$v)) === 'nan') ? null : $v;
 }
 
-// Map sales status
-function getStatusId($mysqli, $statusDesc) {
-    $statusMap = [
-        'Listed' => 'Listed',
-        'Under Contract' => 'Under Contract',
-        'Closed' => 'Closed',
-        'Rescinded' => 'Rescinded',
-        'Expired' => 'Expired'
-    ];
-    
-    $desc = cleanValue($statusDesc);
-    if (isset($statusMap[$desc])) {
-        return getLookupId($mysqli, 'sales_statuses', $statusMap[$desc]);
+// ── SQL value helpers ───────────────────────────────────────────────────────
+$q = function($v) { return $v === null ? "NULL" : "'$v'"; };  // quoted or NULL
+$n = function($v) { return $v === null ? "NULL" : $v; };      // numeric or NULL
+
+foreach ($rows as $rowNum => $row) {
+    // Skip completely empty rows
+    if (empty(array_filter($row, fn($v) => $v !== null && trim((string)$v) !== ''))) continue;
+
+    $accessStatus = strtolower(trim((string)(col($row, $colIndex, 'Status') ?? '')));
+    $statusId = null;
+    if ($accessStatus !== '') {
+        $mappedStatus = $accessStatusMap[$accessStatus] ?? $accessStatus;
+        $statusId = $statusMap[$mappedStatus] ?? null;
+        if (!$statusId) {
+            $errors[] = "Row " . ($rowNum + 2) . ": Unknown status '$accessStatus'";
+        }
     }
-    return null;
+
+    $finType  = strtolower(trim((string)(col($row, $colIndex, 'Financing_Type') ?? '')));
+    $finTypeId = $finType ? ($finTypeMap[$finType] ?? null) : null;
+
+    $propType  = strtolower(trim((string)(col($row, $colIndex, 'Type') ?? '')));
+    $propTypeId = $propType ? ($propTypeMap[$propType] ?? null) : null;
+
+    $lead = strtolower(trim((string)(col($row, $colIndex, 'Lead') ?? '')));
+    $leadSrcId = $lead ? ($leadSrcMap[$lead] ?? null) : null;
+
+    // ── Build INSERT for listings ─────────────────────────────────────────
+    $mls         = esc($conn, nullOrStr(col($row, $colIndex, 'MLS_Number')));
+    $txnNo       = esc($conn, nullOrStr(col($row, $colIndex, 'Transaction_Number')));
+    $addr1       = esc($conn, nullOrStr(col($row, $colIndex, 'Address1')));
+    $addr2       = esc($conn, nullOrStr(col($row, $colIndex, 'Address2')));
+    $city        = esc($conn, nullOrStr(col($row, $colIndex, 'City')));
+    $state       = esc($conn, nullOrStr(col($row, $colIndex, 'State')));
+    $zip         = esc($conn, nullOrStr(col($row, $colIndex, 'ZipCode')));
+    $purchPrice  = parseMoney(col($row, $colIndex, 'Purchase_Price'));
+    $ucPrice     = parseMoney(col($row, $colIndex, 'UC_Price'));
+    $finalPrice  = parseMoney(col($row, $colIndex, 'Final_Price'));
+    $earnAmt     = parseMoney(col($row, $colIndex, 'Earnest_Money_Amount'));
+    $earnWith    = esc($conn, nullOrStr(col($row, $colIndex, 'Earnest_Money_On_Deposit_With')));
+    $dolDate     = parseExcelDate(col($row, $colIndex, 'Date_of_Listing'));
+    $doeDate     = parseExcelDate(col($row, $colIndex, 'Date_of_Expiration'));
+    $contractDt  = parseExcelDate(col($row, $colIndex, 'Contract_Date'));
+    $closingDt   = parseExcelDate(col($row, $colIndex, 'Closing_Date'));
+    $comments    = esc($conn, nullOrStr(col($row, $colIndex, 'Comments')));
+    $isPrivate   = ((col($row, $colIndex, 'Private') ?? false) == true) ? 1 : 0;
+    $multiplier  = intval(col($row, $colIndex, 'Multiplier') ?? 1);
+    $splitWith   = esc($conn, nullOrStr(col($row, $colIndex, 'Split_With')));
+
+    // Commission fields
+    $commPrice   = parseMoney(col($row, $colIndex, 'Commission_Price'));
+    $commPct     = parseMoney(col($row, $colIndex, 'Commission_Pct'));
+    $commOther   = parseMoney(col($row, $colIndex, 'Commission_Other'));
+    $txnFee      = parseMoney(col($row, $colIndex, 'Transaction_Fee'));
+    $errOmit     = parseMoney(col($row, $colIndex, 'Errors_and_Omissions'));
+    $agentSplit  = parseMoney(col($row, $colIndex, 'Agent_Split'));
+    $procFee     = parseMoney(col($row, $colIndex, 'Processing_Fee'));
+    $other2      = parseMoney(col($row, $colIndex, 'Other2'));
+
+    // Agent/Key Player fields
+    $LA_Name = esc($conn, nullOrStr(col($row, $colIndex, 'LA_Name')));
+    $LA_Co   = esc($conn, nullOrStr(col($row, $colIndex, 'LA_Company')));
+    $LA_Fr   = ((col($row, $colIndex, 'LA_For_Report') ?? false) == true) ? 1 : 0;
+    $SA_Name = esc($conn, nullOrStr(col($row, $colIndex, 'SA_Name')));
+    $SA_Co   = esc($conn, nullOrStr(col($row, $colIndex, 'SA_Company')));
+    $SA_Fr   = ((col($row, $colIndex, 'SA_For_Report') ?? false) == true) ? 1 : 0;
+
+    $buyer_name   = esc($conn, nullOrStr(col($row, $colIndex, 'Buyer_Name')));
+    $seller_name  = esc($conn, nullOrStr(col($row, $colIndex, 'Seller_Name')));
+
+    // Other key players (LO, BEO, SEO) — abbreviated for brevity
+    $LO_Name = esc($conn, nullOrStr(col($row, $colIndex, 'LO_Name')));
+    $LO_Co   = esc($conn, nullOrStr(col($row, $colIndex, 'LO_Company')));
+    $BEO_Name= esc($conn, nullOrStr(col($row, $colIndex, 'BEO_Name')));
+    $BEO_Co  = esc($conn, nullOrStr(col($row, $colIndex, 'BEO_Company')));
+    $SEO_Name= esc($conn, nullOrStr(col($row, $colIndex, 'SEO_Name')));
+    $SEO_Co  = esc($conn, nullOrStr(col($row, $colIndex, 'SEO_Company')));
+
+
+    $sql = "INSERT INTO listings (
+        mls_number, transaction_number, address1, address2, city, state, zip,
+        property_type_id, purchase_price, uc_price, final_price,
+        financing_type_id, status_id, lead_source_id,
+        earnest_money_amount, earnest_money_deposit_with,
+        date_of_listing, date_of_expiration, contract_date, closing_date,
+        private, multiplier, split_with, comments,
+        commission_price, commission_pct, commission_other,
+        transaction_fee, errors_omissions, agent_split, processing_fee, other2,
+        buyer_name, seller_name,
+        LA_Name, LA_Company, LA_ForReport,
+        SA_Name, SA_Company, SA_ForReport,
+        LO_Name, LO_Company, BEO_Name, BEO_Company, SEO_Name, SEO_Company
+    ) VALUES (
+        {$q($mls)}, {$q($txnNo)}, {$q($addr1)}, {$q($addr2)}, {$q($city)}, {$q($state)}, {$q($zip)},
+        {$n($propTypeId)}, {$n($purchPrice)}, {$n($ucPrice)}, {$n($finalPrice)},
+        {$n($finTypeId)}, {$n($statusId)}, {$n($leadSrcId)},
+        {$n($earnAmt)}, {$q($earnWith)},
+        {$q($dolDate)}, {$q($doeDate)}, {$q($contractDt)}, {$q($closingDt)},
+        $isPrivate, $multiplier, {$q($splitWith)}, {$q($comments)},
+        {$n($commPrice)}, {$n($commPct)}, {$n($commOther)},
+        {$n($txnFee)}, {$n($errOmit)}, {$n($agentSplit)}, {$n($procFee)}, {$n($other2)},
+        {$q($buyer_name)}, {$q($seller_name)},
+        {$q($LA_Name)}, {$q($LA_Co)}, $LA_Fr,
+        {$q($SA_Name)}, {$q($SA_Co)}, $SA_Fr,
+        {$q($LO_Name)}, {$q($LO_Co)}, {$q($BEO_Name)}, {$q($BEO_Co)}, {$q($SEO_Name)}, {$q($SEO_Co)}
+    )";
+
+    if (!mysqli_query($conn, $sql)) {
+        $errors[] = "Row " . ($rowNum + 2) . ": " . mysqli_error($conn);
+        $skipped++;
+        continue;
+    }
+
+    $listingId = (int)mysqli_insert_id($conn);
+    $imported++;
+
+    // ── Write listing_milestones directly from Excel source ─────────────
+    foreach ($milestoneMap as $milestoneType => [$dateCol, $naCol]) {
+        $rawDate = col($row, $colIndex, $dateCol);
+        $rawNA   = col($row, $colIndex, $naCol);
+        $dueDate = parseExcelDate($rawDate);
+        $hasDate = ($dueDate !== null);
+        $naFlag  = (!$hasDate || $rawNA == true) ? 1 : 0;
+
+        $dueDateSql = $hasDate ? "'$dueDate'" : "NULL";
+        $mSql = "INSERT INTO listing_milestones
+            (listing_id, milestone_type, due_date, completed, na_flag)
+            VALUES ($listingId, '" . mysqli_real_escape_string($conn, $milestoneType) . "',
+            $dueDateSql, 0, $naFlag)";
+
+        if (mysqli_query($conn, $mSql)) {
+            $milestoneRows++;
+        } else {
+            $errors[] = "Milestone $listingId/$milestoneType: " . mysqli_error($conn);
+        }
+    }
+
+    if ($imported % 100 === 0) echo "  ... $imported rows imported\n";
 }
 
-// Map lead source
-function getLeadSourceId($mysqli, $leadDesc) {
-    $leadMap = [
-        'ELP' => 'ELP',
-        'Referral' => 'Referral',
-        'Laser Lending' => 'Laser Lending',
-        'Sign Call' => 'Sign Call',
-        'Abel' => 'Abel',
-        'Google' => 'Google',
-        'Other' => 'Other',
-        'Past Client' => 'Other',
-        '5476' => 'Other'
-    ];
-    
-    $desc = cleanValue($leadDesc);
-    if (empty($desc)) return null;
-    
-    $stmt = $mysqli->prepare("SELECT id FROM lead_sources WHERE description = ?");
-    $stmt->bind_param('s', $desc);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($row = $result->fetch_assoc()) {
-        return $row['id'];
-    }
-    
-    foreach ($leadMap as $key => $value) {
-        if (stripos($desc, $key) !== false) {
-            return getLookupId($mysqli, 'lead_sources', $value);
-        }
-    }
-    
-    return getLookupId($mysqli, 'lead_sources', $desc, true);
+$conn->commit();
+
+echo "----------------------------------------\n";
+echo "✅ Listings imported:  $imported\n";
+echo "✅ Milestone rows:     $milestoneRows\n";
+echo "⚠️  Skipped:           $skipped\n";
+echo "❌ Errors:             " . count($errors) . "\n";
+
+if ($errors) {
+    echo "\nFirst 20 errors:\n";
+    foreach (array_slice($errors, 0, 20) as $e) echo "  $e\n";
 }
 
-try {
-    $excelFile = 'PropertyTb.xlsx';
-    if (!file_exists($excelFile)) {
-        throw new Exception("Excel file '$excelFile' not found.");
-    }
-
-    echo "📂 Loading Excel file: $excelFile\n";
-    
-    $spreadsheet = IOFactory::load($excelFile);
-    $worksheet = $spreadsheet->getActiveSheet();
-    $rows = $worksheet->toArray();
-    
-    if (empty($rows)) {
-        throw new Exception("Excel file is empty.");
-    }
-
-    $headerRow = $rows[0];
-    echo "📋 Found " . count($headerRow) . " columns in header\n";
-    
-    // Build column index mapping
-    $colIndexes = [];
-    foreach ($headerRow as $index => $colName) {
-        $colIndexes[trim($colName)] = $index;
-    }
-    
-    // Start transaction
-    $mysqli->begin_transaction();
-    
-    $inserted = 0;
-    $skipped = 0;
-    $errors = [];
-    
-    // Define the column list - match exactly with your database table
-    $columns = [
-        'mls_number', 'transaction_number', 'address1', 'address2', 'city', 'state', 'zip',
-        'property_type_id', 'purchase_price', 'uc_price', 'final_price', 'financing_type_id',
-        'status_id', 'earnest_money_amount', 'earnest_money_deposit_with',
-        'contract_date', 'date_of_listing', 'date_of_expiration', 'closing_date',
-        'buyer_name', 'buyer_home_phone', 'buyer_cell_phone1', 'buyer_cell_phone2',
-        'buyer_fax', 'buyer_email1', 'buyer_email2',
-        'seller_name', 'seller_home_phone', 'seller_cell_phone1', 'seller_cell_phone2',
-        'seller_fax', 'seller_email1', 'seller_email2',
-        'commission_price', 'commission_pct', 'commission_other',
-        'transaction_fee', 'errors_omissions', 'agent_split', 'processing_fee', 'other2',
-        'split_with', 'multiplier', 'private', 'comments', 'lead_source_id',
-        'LO_Name', 'LO_Company', 'LO_Email', 'LO_OfficePhone', 'LO_CellPhone', 'LO_Fax',
-        'LO_Address1', 'LO_Address2', 'LO_City', 'LO_State', 'LO_Zip',
-        'LO_AsstName', 'LO_AsstOfficePhone', 'LO_AsstFax', 'LO_AsstEmail', 'LO_AddAsstFlag',
-        'BEO_Name', 'BEO_Company', 'BEO_Email', 'BEO_OfficePhone', 'BEO_CellPhone', 'BEO_Fax',
-        'BEO_Address1', 'BEO_Address2', 'BEO_City', 'BEO_State', 'BEO_Zip',
-        'BEO_AsstName', 'BEO_AsstOfficePhone', 'BEO_AsstFax', 'BEO_AsstEmail', 'BEO_AddAsstFlag',
-        'SEO_Name', 'SEO_Company', 'SEO_Email', 'SEO_OfficePhone', 'SEO_CellPhone', 'SEO_Fax',
-        'SEO_Address1', 'SEO_Address2', 'SEO_City', 'SEO_State', 'SEO_Zip',
-        'SEO_AsstName', 'SEO_AsstOfficePhone', 'SEO_AsstFax', 'SEO_AsstEmail', 'SEO_AddAsstFlag',
-        'LA_Name', 'LA_Company', 'LA_Email', 'LA_OfficePhone', 'LA_CellPhone', 'LA_Fax',
-        'LA_Address1', 'LA_Address2', 'LA_City', 'LA_State', 'LA_Zip',
-        'LA_AsstName', 'LA_AsstOfficePhone', 'LA_AsstFax', 'LA_AsstEmail',
-        'LA_ForReport', 'LA_AddAsstFlag',
-        'SA_Name', 'SA_Company', 'SA_Email', 'SA_OfficePhone', 'SA_CellPhone', 'SA_Fax',
-        'SA_Address1', 'SA_Address2', 'SA_City', 'SA_State', 'SA_Zip',
-        'SA_AsstName', 'SA_AsstOfficePhone', 'SA_AsstFax', 'SA_AsstEmail',
-        'SA_ForReport', 'SA_AddAsstFlag'
-    ];
-    
-    echo "⏳ Processing rows...\n";
-    
-    // Loop through data rows
-    for ($rowIndex = 1; $rowIndex < count($rows); $rowIndex++) {
-        $rowData = $rows[$rowIndex];
-        
-        // Skip empty rows
-        if (empty(array_filter($rowData, function($val) { return $val !== null && $val !== ''; }))) {
-            $skipped++;
-            continue;
-        }
-        
-        // Helper to get column value
-        $getCol = function($colName) use ($rowData, $colIndexes) {
-            if (isset($colIndexes[$colName]) && isset($rowData[$colIndexes[$colName]])) {
-                return $rowData[$colIndexes[$colName]];
-            }
-            return null;
-        };
-        
-        // Get MLS number
-        $mlsNumber = cleanValue($getCol('MLS_Number'));
-        if (empty($mlsNumber) || $mlsNumber === 'N/A' || $mlsNumber === 'n/a') {
-            $skipped++;
-            continue;
-        }
-        
-        // Parse dates
-        $contractDate = parseDate($getCol('Contract_Date'));
-        $closingDate = parseDate($getCol('Closing_Date'));
-        $dateOfListing = parseDate($getCol('Date_of_Listing'));
-        $dateOfExpiration = parseDate($getCol('Date_of_Expiration'));
-        
-        // Parse financial fields
-        $finalPrice = parseFinancial($getCol('Final_Price'));
-        $purchasePrice = parseFinancial($getCol('Purchase_Price'));
-        $ucPrice = parseFinancial($getCol('UC_Price'));
-        $commissionPrice = parseFinancial($getCol('Commission_Price'));
-        $commissionPct = parsePercentage($getCol('Commission_Pct'));
-        $commissionOther = parseFinancial($getCol('Commission_Other'));
-        $transactionFee = parseFinancial($getCol('Transaction_Fee'));
-        $errorsOmissions = parseFinancial($getCol('Errors_and_Omissions'));
-        $agentSplit = parseFinancial($getCol('Agent_Split'));
-        $processingFee = parseFinancial($getCol('Processing_Fee'));
-        $other2 = parseFinancial($getCol('Other2'));
-        $earnestMoney = parseFinancial($getCol('Earnest_Money_Amount'));
-        $multiplier = parseFinancial($getCol('TA_Balance'));
-        
-        if ($multiplier === null || $multiplier == 0) {
-            $multiplier = 1.0;
-        }
-        
-        // Get lookup IDs
-        $statusId = getStatusId($mysqli, cleanValue($getCol('Status')));
-        $propertyTypeId = getPropertyTypeId($mysqli, cleanValue($getCol('Type')));
-        $financingTypeId = getFinancingTypeId($mysqli, cleanValue($getCol('Financing_Type')));
-        $leadSourceId = getLeadSourceId($mysqli, cleanValue($getCol('Lead')));
-        
-        // Handle Earnest Money On Deposit With
-        $emDepositWith = cleanValue($getCol('Earnest_Money_On_Deposit_With'));
-        if ($emDepositWith === 'Larson and Company' || $emDepositWith === 'n/a') {
-            $emDepositWith = null;
-        }
-        
-        // Handle private flag
-        $private = cleanValue($getCol('Private'));
-        $private = ($private === 'True' || $private === 'true' || $private === '1') ? 1 : 0;
-        
-        // Handle split with
-        $splitWith = cleanValue($getCol('Split_With'));
-        if ($splitWith === '') $splitWith = null;
-        
-        // Build values array - each value must be properly escaped
-        $values = [
-            escapeString($mysqli, $mlsNumber),
-            escapeString($mysqli, cleanValue($getCol('Transaction_Number'))),
-            escapeString($mysqli, cleanValue($getCol('Address1'))),
-            escapeString($mysqli, cleanValue($getCol('Address2'))),
-            escapeString($mysqli, cleanValue($getCol('City'))),
-            escapeString($mysqli, cleanValue($getCol('State')) ?: 'UT'),
-            escapeString($mysqli, cleanValue($getCol('ZipCode'))),
-            escapeString($mysqli, $propertyTypeId),
-            escapeString($mysqli, $purchasePrice),
-            escapeString($mysqli, $ucPrice),
-            escapeString($mysqli, $finalPrice),
-            escapeString($mysqli, $financingTypeId),
-            escapeString($mysqli, $statusId),
-            escapeString($mysqli, $earnestMoney),
-            escapeString($mysqli, $emDepositWith),
-            escapeString($mysqli, $contractDate),
-            escapeString($mysqli, $dateOfListing),
-            escapeString($mysqli, $dateOfExpiration),
-            escapeString($mysqli, $closingDate),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Name'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Home_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Cell_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Cell_Telephone2'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Email_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('Buyer_Email_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Name'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Home_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Cell_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Cell_Telephone2'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Email_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('Seller_Email_Address2'))),
-            escapeString($mysqli, $commissionPrice),
-            escapeString($mysqli, $commissionPct),
-            escapeString($mysqli, $commissionOther),
-            escapeString($mysqli, $transactionFee),
-            escapeString($mysqli, $errorsOmissions),
-            escapeString($mysqli, $agentSplit),
-            escapeString($mysqli, $processingFee),
-            escapeString($mysqli, $other2),
-            escapeString($mysqli, $splitWith),
-            escapeString($mysqli, $multiplier),
-            escapeString($mysqli, $private),
-            escapeString($mysqli, cleanValue($getCol('Comments'))),
-            escapeString($mysqli, $leadSourceId),
-            // LO fields
-            escapeString($mysqli, cleanValue($getCol('LO_Name'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Company'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Email_Address'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Office_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Cell_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('LO_City'))),
-            escapeString($mysqli, cleanValue($getCol('LO_State'))),
-            escapeString($mysqli, cleanValue($getCol('LO_ZipCode'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Asst_Name1'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Asst_Office_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Asst_Fax_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('LO_Asst_Email_Address1'))),
-            escapeString($mysqli, (int)cleanValue($getCol('LO_AddAsst_Flag')) ?: 0),
-            // BEO fields
-            escapeString($mysqli, cleanValue($getCol('BEO_Name'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Company'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Email_Address'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Office_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Cell_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_City'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_State'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_ZipCode'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Asst_Name1'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Asst_Office_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Asst_Fax_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('BEO_Asst_Email_Address1'))),
-            escapeString($mysqli, (int)cleanValue($getCol('BEO_AddAsst_Flag')) ?: 0),
-            // SEO fields
-            escapeString($mysqli, cleanValue($getCol('SEO_Name'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Company'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Email_Address'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Office_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Cell_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_City'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_State'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_ZipCode'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Asst_Name1'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Asst_Office_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Asst_Fax_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('SEO_Asst_Email_Address1'))),
-            escapeString($mysqli, (int)cleanValue($getCol('SEO_AddAsst_Flag')) ?: 0),
-            // LA fields
-            escapeString($mysqli, cleanValue($getCol('LA_Name'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Company'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Email_Address'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Office_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Cell_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('LA_City'))),
-            escapeString($mysqli, cleanValue($getCol('LA_State'))),
-            escapeString($mysqli, cleanValue($getCol('LA_ZipCode'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Asst_Name1'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Asst_Office_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Asst_Fax_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('LA_Asst_Email_Address1'))),
-            escapeString($mysqli, (int)cleanValue($getCol('LA_For_Report')) ?: 1),
-            escapeString($mysqli, (int)cleanValue($getCol('LA_AddAsst_Flag')) ?: 0),
-            // SA fields
-            escapeString($mysqli, cleanValue($getCol('SA_Name'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Company'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Email_Address'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Office_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Cell_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Fax_Telephone'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Address1'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Address2'))),
-            escapeString($mysqli, cleanValue($getCol('SA_City'))),
-            escapeString($mysqli, cleanValue($getCol('SA_State'))),
-            escapeString($mysqli, cleanValue($getCol('SA_ZipCode'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Asst_Name1'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Asst_Office_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Asst_Fax_Telephone1'))),
-            escapeString($mysqli, cleanValue($getCol('SA_Asst_Email_Address1'))),
-            escapeString($mysqli, (int)cleanValue($getCol('SA_For_Report')) ?: 1),
-            escapeString($mysqli, (int)cleanValue($getCol('SA_AddAsst_Flag')) ?: 0)
-        ];
-        
-        // Build the INSERT query
-        $query = "INSERT INTO `listings` (`" . implode('`, `', $columns) . "`) VALUES (" . implode(', ', $values) . ")";
-        
-        try {
-            if ($mysqli->query($query)) {
-                $inserted++;
-                if ($inserted % 50 === 0) {
-                    echo "  ✅ Inserted $inserted records...\n";
-                }
-            } else {
-                $errors[] = "Row " . ($rowIndex + 1) . ": " . $mysqli->error;
-                $skipped++;
-            }
-        } catch (Exception $e) {
-            $errors[] = "Row " . ($rowIndex + 1) . ": " . $e->getMessage();
-            $skipped++;
-        }
-    }
-    
-    $mysqli->commit();
-    
-    echo "\n✅ Import completed successfully!\n";
-    echo "📊 Summary:\n";
-    echo "   - Inserted: $inserted records\n";
-    echo "   - Skipped: $skipped records\n";
-    echo "   - Total rows processed: " . ($inserted + $skipped) . "\n";
-    
-    if (!empty($errors)) {
-        echo "   - Errors: " . count($errors) . " (first 10 shown below)\n";
-        foreach (array_slice($errors, 0, 10) as $error) {
-            echo "     ⚠️  $error\n";
-        }
-    }
-    
-} catch (Exception $e) {
-    if (isset($mysqli) && $mysqli->errno) {
-        $mysqli->rollback();
-    }
-    echo "\n❌ ERROR: " . $e->getMessage() . "\n";
-    echo "   File: " . $e->getFile() . " Line: " . $e->getLine() . "\n";
-    exit(1);
-}
-
-$mysqli->close();
+echo "</pre><p><a href='transactions.php'>View Transactions →</a></p>";
