@@ -111,18 +111,21 @@ if ($tab === 'progress') {
                      'July','August','September','October','November','December'];
 
     $uc_m = $cl_m = $li_m = $re_m = [];
+    // FIX: Count ALL records whose contract_date falls in year (not just status=UC)
+    // Matches Access Progress Report logic — most will have since closed/rescinded
     $r = mysqli_query($conn,"SELECT MONTH(contract_date) mn,COUNT(*) c FROM listings l
-         WHERE status_id=$s_uc AND YEAR(contract_date)=$year AND $aw GROUP BY MONTH(contract_date)");
+         WHERE contract_date IS NOT NULL AND YEAR(contract_date)=$year AND $aw GROUP BY MONTH(contract_date)");
     while($row=mysqli_fetch_assoc($r)) $uc_m[$row['mn']]=$row['c'];
 
     $r = mysqli_query($conn,"SELECT MONTH(closing_date) mn,COUNT(*) c FROM listings l
          WHERE status_id=$s_closed AND YEAR(closing_date)=$year AND $aw GROUP BY MONTH(closing_date)");
     while($row=mysqli_fetch_assoc($r)) $cl_m[$row['mn']]=$row['c'];
 
+    // FIX: Count ALL records listed in year regardless of current status
     $r = mysqli_query($conn,"SELECT MONTH(date_of_listing) mn,
-         SUM(status_id=$s_listed) lc, SUM(status_id=$s_resc) rc
-         FROM listings l WHERE YEAR(date_of_listing)=$year
-         AND (status_id=$s_listed OR status_id=$s_resc) AND $aw GROUP BY MONTH(date_of_listing)");
+         COUNT(*) lc, SUM(status_id=$s_resc) rc
+         FROM listings l WHERE date_of_listing IS NOT NULL AND YEAR(date_of_listing)=$year
+         AND $aw GROUP BY MONTH(date_of_listing)");
     while($row=mysqli_fetch_assoc($r)) { $li_m[$row['mn']]=$row['lc']; $re_m[$row['mn']]=$row['rc']; }
 
     $ytd = mysqli_fetch_assoc(mysqli_query($conn,"
@@ -132,9 +135,9 @@ if ($tab === 'progress') {
         FROM listings l WHERE status_id=$s_closed AND YEAR(closing_date)=$year AND $aw"));
 
     $ytdl = mysqli_fetch_assoc(mysqli_query($conn,"
-        SELECT SUM(status_id=$s_listed) ytd_li, SUM(status_id=$s_resc) ytd_re
-        FROM listings l WHERE YEAR(date_of_listing)=$year
-        AND (status_id=$s_listed OR status_id=$s_resc) AND $aw"));
+        SELECT COUNT(*) ytd_li, SUM(status_id=$s_resc) ytd_re
+        FROM listings l WHERE date_of_listing IS NOT NULL AND YEAR(date_of_listing)=$year
+        AND $aw"));
 }
 
 // ── TAB: listings ─────────────────────────────────────────────────────────

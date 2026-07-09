@@ -167,11 +167,15 @@ $months_names = ['January','February','March','April','May','June',
                  'July','August','September','October','November','December'];
 
 // Under Contract per month (by contract_date year)
+// MATCHES ACCESS LOGIC: counts ALL records whose contract_date falls in the
+// year, regardless of current status — because most will have since closed.
+// A record that went under contract in Jan 2025 and closed in Feb 2025
+// should still count as 1 Under Contract for January.
 $uc_monthly = [];
 $r = mysqli_query($conn, "
     SELECT MONTH(l.contract_date) AS mn, COUNT(*) AS cnt
     FROM listings l
-    WHERE l.status_id = $sid_uc
+    WHERE l.contract_date IS NOT NULL
       AND YEAR(l.contract_date) = $year
       AND $aw
     GROUP BY MONTH(l.contract_date)
@@ -193,16 +197,20 @@ $r = mysqli_query($conn, "
 while ($row = mysqli_fetch_assoc($r)) $closed_monthly[$row['mn']] = $row['cnt'];
 
 // Listed per month (by date_of_listing year) + rescinded count
+// MATCHES ACCESS LOGIC: counts ALL records listed in the year regardless of
+// current status. A property listed in March 2025 that later closed should
+// still count as 1 Listed for March in the Progress Report.
+// Rescinded = any record that has status_id=Rescinded AND was listed in year.
 $listed_monthly    = [];
 $rescinded_monthly = [];
 $r = mysqli_query($conn, "
     SELECT
-        MONTH(l.date_of_listing)  AS mn,
-        SUM(l.status_id = $sid_listed)   AS listed_cnt,
-        SUM(l.status_id = $sid_rescind)  AS resc_cnt
+        MONTH(l.date_of_listing) AS mn,
+        COUNT(*)                  AS listed_cnt,
+        SUM(l.status_id = $sid_rescind) AS resc_cnt
     FROM listings l
-    WHERE YEAR(l.date_of_listing) = $year
-      AND (l.status_id = $sid_listed OR l.status_id = $sid_rescind)
+    WHERE l.date_of_listing IS NOT NULL
+      AND YEAR(l.date_of_listing) = $year
       AND $aw
     GROUP BY MONTH(l.date_of_listing)
     ORDER BY mn
