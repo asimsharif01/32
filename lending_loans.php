@@ -102,6 +102,7 @@ while ($row = mysqli_fetch_assoc($res)) $statuses[] = $row;
                     <thead>
                         <tr>
                             <th>Action</th>
+                            <th>Last Updated</th>
                             <th>Lender</th>
                             <th>Borrower Name</th>
                             <th>Loan Consultant</th>
@@ -152,6 +153,7 @@ while ($row = mysqli_fetch_assoc($res)) $statuses[] = $row;
                                 lp.name   AS processor_name,
                                 ls.name   AS status_name,
                                 l.date_closed,
+                                l.updated_at,
                                 lt.name   AS loan_type_name,
                                 pt.name   AS purchase_type_name,
                                 rt.name   AS role_type_name,
@@ -187,6 +189,7 @@ while ($row = mysqli_fetch_assoc($res)) $statuses[] = $row;
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
+                            <td><?= $row['updated_at'] ? date('M j, Y g:i A', strtotime($row['updated_at'])) : '' ?></td>
                             <td><?= htmlspecialchars($row['transaction_no'] ?? '') ?></td>
                             <td><?= htmlspecialchars($row['borrower_name']) ?></td>
                             <td><?= htmlspecialchars($row['consultant_name'] ?? '') ?></td>
