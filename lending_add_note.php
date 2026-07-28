@@ -21,6 +21,9 @@ $stmt = $conn->prepare("INSERT INTO loan_notes (loan_id, username, note_text) VA
 $stmt->bind_param('iss', $loan_id, $username, $note_text);
 if ($stmt->execute()) {
     $newId = $conn->insert_id;
+    // Touch loans.updated_at so the Last Updated column in the
+    // Loan Info grid reflects note activity, not just form saves
+    $conn->query("UPDATE loans SET updated_at = NOW() WHERE id = $loan_id");
     // Fetch the created_at timestamp to format it nicely
     $res = $conn->query("SELECT created_at FROM loan_notes WHERE id = $newId");
     $row = $res->fetch_assoc();
