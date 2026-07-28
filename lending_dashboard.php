@@ -58,8 +58,18 @@ $revenue_year = mysqli_fetch_assoc(mysqli_query($conn, "
 "))['v'] ?? 0;
 
 $active_pipeline = mysqli_fetch_assoc(mysqli_query($conn, "
-    SELECT COUNT(*) c FROM loans WHERE status_id = $s_submitted
+    SELECT COUNT(*) c FROM loans
+    WHERE status_id NOT IN ($s_funded, $s_rescinded)
 "))['c'] ?? 0;
+
+$pipeline_breakdown = [];
+$pb_res = mysqli_query($conn, "
+    SELECT ls.name AS status_name, COUNT(*) AS cnt
+    FROM loans l JOIN loan_statuses ls ON l.status_id = ls.id
+    WHERE l.status_id NOT IN ($s_funded, $s_rescinded)
+    GROUP BY ls.name ORDER BY cnt DESC
+");
+while ($pb_row = mysqli_fetch_assoc($pb_res)) $pipeline_breakdown[] = $pb_row;
 
 $total_loans = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) c FROM loans"))['c'] ?? 0;
 
@@ -278,6 +288,9 @@ function fmtD($d) { return ($d && $d != '0000-00-00') ? date('M j', strtotime($d
     <ol class="breadcrumb" style="margin:0">
         <li><h5 class="bc-title">Dashboard</h5></li>
     </ol>
+    <a href="lending_loan_detail.php?action=create" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i> Add New
+            </a>
 </div>
 
 <div class="dash">
@@ -322,7 +335,9 @@ function fmtD($d) { return ($d && $d != '0000-00-00') ? date('M j', strtotime($d
             <div class="kpi-icon">📋</div>
             <div class="kpi-val"><?= $active_pipeline ?></div>
             <div class="kpi-label">Active Pipeline</div>
-            <div class="kpi-sub">Total loans <span><?= $total_loans ?></span></div>
+            <?php foreach ($pipeline_breakdown as $pb): ?>
+<div class="kpi-sub"><?= htmlspecialchars($pb['status_name']) ?>: <span><?= $pb['cnt'] ?></span></div>
+<?php endforeach; ?>
         </div>
         <div class="kpi green d-none">
             <div class="kpi-icon">💵</div>
